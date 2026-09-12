@@ -362,13 +362,23 @@ export const StorageService = {
   // 2.1 CONFIGURAÇÕES GLOBAIS DO BOT & WHATSAPP
   // ==============================================================================
   async getBotConfig(): Promise<BotConfig> {
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        const cloud = await SupabaseService.getBotConfig();
+        if (cloud) {
+          setItem(STORAGE_KEYS.SETTINGS + '_bot', cloud);
+          return cloud;
+        }
+      } catch (e) {}
+    }
     try {
       const res = await fetch(`${API_BASE}/api/bot-config`).catch(() => null);
       if (res && res.ok) {
         const json = await res.json();
-        if (json.config) {
-          setItem(STORAGE_KEYS.SETTINGS + '_bot', json.config);
-          return json.config;
+        const cfg = json.config || (json.bot_name ? json : null);
+        if (cfg) {
+          setItem(STORAGE_KEYS.SETTINGS + '_bot', cfg);
+          return cfg;
         }
       }
     } catch (e) {}
@@ -377,7 +387,15 @@ export const StorageService = {
 
   async saveBotConfig(config: Partial<BotConfig>): Promise<BotConfig> {
     const current = await this.getBotConfig();
-    const updated: BotConfig = { ...current, ...config };
+    const updated: BotConfig = { ...current, ...config, updated_at: new Date().toISOString() };
+
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        await SupabaseService.saveBotConfig(updated);
+      } catch (e) {
+        console.warn('[StorageService] saveBotConfig cloud error:', e);
+      }
+    }
 
     try {
       await fetch(`${API_BASE}/api/bot-config`, {
@@ -1730,9 +1748,18 @@ export const StorageService = {
   },
 
   // ==============================================================================
-  // 11. SETTINGS & BOT PROFILE
+  // 11. SETTINGS & BOT PROFILE (Sincronizado Cloud-First com Supabase)
   // ==============================================================================
   async getSettings(): Promise<Settings> {
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        const cloud = await SupabaseService.getSettingsFromCloud();
+        if (cloud && Object.keys(cloud).length > 0) {
+          setItem(STORAGE_KEYS.SETTINGS, cloud);
+          return cloud;
+        }
+      } catch (e) {}
+    }
     try {
       const res = await fetch(`${API_BASE}/api/settings`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
       if (res && res.ok) {
@@ -1751,6 +1778,14 @@ export const StorageService = {
     const updated = { ...current, ...settings, updated_at: new Date().toISOString() };
     setItem(STORAGE_KEYS.SETTINGS, updated);
 
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        await SupabaseService.saveSettingsToCloud(updated);
+      } catch (e) {
+        console.warn('[StorageService] saveSettings cloud error:', e);
+      }
+    }
+
     try {
       await fetch(`${API_BASE}/api/settings`, {
         method: 'POST',
@@ -1763,6 +1798,18 @@ export const StorageService = {
   },
 
   async getBotProfile(): Promise<BotProfile> {
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        const cloud = await SupabaseService.getBotProfileFromCloud();
+        if (cloud && Object.keys(cloud).length > 0) {
+          const settings = getItem<Settings>(STORAGE_KEYS.SETTINGS, initialSettings);
+          settings.bot_profile = { ...(settings.bot_profile || {}), ...cloud };
+          setItem(STORAGE_KEYS.SETTINGS, settings);
+          return cloud;
+        }
+      } catch (e) {}
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/bot-config`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
       if (res && res.ok) {
@@ -1775,15 +1822,28 @@ export const StorageService = {
         }
       }
     } catch {}
+
     const settings = await this.getSettings();
     return settings.bot_profile || defaultBotProfile;
   },
 
   async saveBotProfile(profile: Partial<BotProfile>): Promise<BotProfile> {
     const current = await this.getBotProfile();
-    const updated = { ...current, ...profile };
+    const updated: BotProfile = { ...current, ...profile, updated_at: new Date().toISOString() };
+    
+    // Atualizar no cache local de settings
     await this.saveSettings({ bot_profile: updated });
 
+    // Salvar no Supabase (em bot_config e settings.bot_profile)
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        await SupabaseService.saveBotProfileToCloud(updated);
+      } catch (e) {
+        console.warn('[StorageService] saveBotProfile cloud error:', e);
+      }
+    }
+
+    // Notificar API da Discloud em segundo plano
     try {
       await fetch(`${API_BASE}/api/bot-config`, {
         method: 'POST',
@@ -1827,6 +1887,16 @@ export const StorageService = {
   },
 
   async getCustomVariables(): Promise<any[]> {
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        const cloudVars = await SupabaseService.getCustomVariablesFromCloud();
+        if (Array.isArray(cloudVars) && cloudVars.length > 0) {
+          setItem('pitoco_custom_variables', cloudVars);
+          return cloudVars;
+        }
+      } catch (e) {}
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/custom-variables`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
       if (res && res.ok) {
@@ -1837,24 +1907,17 @@ export const StorageService = {
         }
       }
     } catch {}
+
     return getItem<any[]>('pitoco_custom_variables', [
-      { id: 'var-1', name: 'nome_loja', key: 'nome_loja', value: 'Pitoco de Gente', description: 'Nome fantasia da marca' },
-      { id: 'var-2', name: 'cidade_matriz', key: 'cidade_matriz', value: 'Recife/PE', description: 'Sede da matriz' },
-      { id: 'var-3', name: 'chave_pix', key: 'chave_pix', value: 'financeiro@pitocodegente.com.br', description: 'Chave PIX oficial' },
-      { id: 'var-4', name: 'frete_gratis_valor', key: 'frete_gratis_valor', value: '250.00', description: 'Valor mínimo frete grátis' },
+      { id: 'var-1', name: '{{nome_loja}}', key: 'nome_loja', value: 'Pitoco de Gente', description: 'Nome fantasia da marca' },
+      { id: 'var-2', name: '{{cidade_matriz}}', key: 'cidade_matriz', value: 'Recife/PE', description: 'Sede da matriz' },
+      { id: 'var-3', name: '{{chave_pix}}', key: 'chave_pix', value: 'financeiro@pitocodegente.com.br', description: 'Chave PIX oficial' },
+      { id: 'var-4', name: '{{frete_gratis_valor}}', key: 'frete_gratis_valor', value: '250.00', description: 'Valor mínimo frete grátis' },
     ]);
   },
 
   async saveCustomVariable(v: any): Promise<any> {
     const itemToSave = { ...v, id: v.id || `var-${Date.now()}` };
-    try {
-      await fetch(`${API_BASE}/api/custom-variables`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(itemToSave),
-      }).catch(() => {});
-    } catch {}
-
     const list = await this.getCustomVariables();
     const idx = list.findIndex(item => item.id === itemToSave.id || item.key === itemToSave.key);
     if (idx >= 0) {
@@ -1863,30 +1926,71 @@ export const StorageService = {
       list.push(itemToSave);
     }
     setItem('pitoco_custom_variables', list);
+
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        await SupabaseService.saveCustomVariablesToCloud(list);
+      } catch (e) {
+        console.warn('[StorageService] saveCustomVariables cloud error:', e);
+      }
+    }
+
+    try {
+      await fetch(`${API_BASE}/api/custom-variables`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(itemToSave),
+      }).catch(() => {});
+    } catch {}
+
     return itemToSave;
   },
 
   async deleteCustomVariable(id: string): Promise<boolean> {
+    const list = await this.getCustomVariables();
+    const filtered = list.filter(item => item.id !== id && item.key !== id);
+    setItem('pitoco_custom_variables', filtered);
+
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        await SupabaseService.saveCustomVariablesToCloud(filtered);
+      } catch (e) {
+        console.warn('[StorageService] deleteCustomVariable cloud error:', e);
+      }
+    }
+
     try {
       await fetch(`${API_BASE}/api/custom-variables/${id}`, { method: 'DELETE' }).catch(() => {});
     } catch {}
-    const list = await this.getCustomVariables();
-    const filtered = list.filter(item => item.id !== id);
-    setItem('pitoco_custom_variables', filtered);
+
     return true;
   },
 
   async getBotVariables(): Promise<Record<string, any>> {
-    const custom = await this.getCustomVariables();
+    const [custom, profile] = await Promise.all([
+      this.getCustomVariables(),
+      this.getBotProfile(),
+    ]);
+
     const map: Record<string, any> = {
-      empresa: 'Pitoco de Gente',
-      marca: 'Pitoco de Gente',
-      site: 'https://pitoco.malaca.com.br',
-      whatsapp: '(81) 98765-4321',
-      chave_pix: 'financeiro@pitocodegente.com.br',
+      empresa: profile.company_name || 'Pitoco de Gente',
+      marca: profile.company_name || 'Pitoco de Gente',
+      bot_nome: profile.name || 'Pitoco Bot',
+      nome_assistente: profile.name || 'Pitoco Bot',
+      site: profile.website_url || 'https://pitoco.malaca.com.br',
+      site_empresa: profile.website_url || 'https://pitoco.malaca.com.br',
+      whatsapp: profile.support_phone || '(81) 98765-4321',
+      suporte_telefone: profile.support_phone || '(81) 98765-4321',
+      suporte_email: profile.support_email || 'contato@pitocodegente.com.br',
+      horario_atendimento: profile.business_hours || '08:00 às 18:00',
+      chave_pix: profile.pix_key || 'financeiro@pitocodegente.com.br',
+      beneficiario_pix: profile.pix_owner || 'Pitoco de Gente Artigos Infantis LTDA',
+      endereco_loja: profile.company_address || 'Recife - PE',
     };
+
     for (const c of custom) {
-      if (c.key) map[c.key] = c.value;
+      const cleanKey = (c.key || c.name || '').replace(/[{}]/g, '').trim();
+      if (cleanKey) map[cleanKey] = c.value;
     }
     return map;
   },

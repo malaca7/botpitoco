@@ -9,6 +9,9 @@ import {
   Message, 
   Conversation, 
   BotConfig,
+  BotProfile,
+  Settings,
+  CustomVariable,
   FlowNode,
   FlowEdge,
   Flow
@@ -439,6 +442,161 @@ export async function saveBotConfig(config: Partial<BotConfig>): Promise<BotConf
   } catch (err) {
     console.warn('[Supabase] saveBotConfig error:', err);
     return null;
+  }
+}
+
+export async function getBotProfileFromCloud(): Promise<BotProfile | null> {
+  try {
+    const [botRes, setRes] = await Promise.all([
+      supabase.from('bot_config').select('*').eq('id', 'default').maybeSingle(),
+      supabase.from('settings').select('bot_profile').eq('id', 'default').maybeSingle(),
+    ]);
+
+    const botData = botRes.data;
+    const settingsBotProfile = setRes.data?.bot_profile;
+
+    if (!botData && !settingsBotProfile) return null;
+
+    const merged: Partial<BotProfile> = {
+      ...(settingsBotProfile || {}),
+      name: botData?.name || botData?.bot_name || settingsBotProfile?.name || 'Pitoco Bot',
+      company_name: botData?.store_name || settingsBotProfile?.company_name || 'Pitoco de Gente',
+      tone: botData?.tone || settingsBotProfile?.tone || 'Amigável e Acolhedor',
+      avatar_url: botData?.avatar_url || settingsBotProfile?.avatar_url || '',
+      support_phone: botData?.support_phone || settingsBotProfile?.support_phone || '',
+      support_email: botData?.support_email || settingsBotProfile?.support_email || '',
+      business_hours: botData?.business_hours || settingsBotProfile?.business_hours || 'Seg a Sex: 08:00 às 18:00',
+      website_url: botData?.website_url || settingsBotProfile?.website_url || 'https://pitoco.malaca.com.br',
+      company_address: botData?.company_address || settingsBotProfile?.company_address || '',
+      pix_key: botData?.pix_key || settingsBotProfile?.pix_key || '',
+      pix_owner: botData?.pix_owner || botData?.pix_name || settingsBotProfile?.pix_owner || '',
+      pix_key_type: settingsBotProfile?.pix_key_type || 'telefone',
+      notify_new_bookings: typeof botData?.notify_new_bookings === 'boolean' ? botData.notify_new_bookings : (settingsBotProfile?.notify_new_bookings ?? true),
+      notify_phone: botData?.notify_phone || settingsBotProfile?.notify_phone || '',
+      play_audio_alerts: typeof botData?.play_audio_alerts === 'boolean' ? botData.play_audio_alerts : (settingsBotProfile?.play_audio_alerts ?? true),
+      flow_cooldown_minutes: typeof settingsBotProfile?.flow_cooldown_minutes === 'number' ? settingsBotProfile.flow_cooldown_minutes : 60,
+      gender: settingsBotProfile?.gender || 'female',
+      welcome_message: botData?.welcome_message || settingsBotProfile?.welcome_message,
+      handoff_message: botData?.handoff_message || settingsBotProfile?.handoff_message,
+      fallback_message: botData?.fallback_message || settingsBotProfile?.fallback_message,
+      updated_at: botData?.updated_at || settingsBotProfile?.updated_at || new Date().toISOString(),
+    };
+
+    return merged as BotProfile;
+  } catch (err) {
+    console.warn('[Supabase] getBotProfileFromCloud fallback:', err);
+    return null;
+  }
+}
+
+export async function saveBotProfileToCloud(profile: Partial<BotProfile>): Promise<BotProfile | null> {
+  try {
+    const now = new Date().toISOString();
+    
+    // 1. Gravar em bot_config
+    const botPayload: Record<string, any> = {
+      id: 'default',
+      updated_at: now,
+    };
+    if (profile.name) {
+      botPayload.name = profile.name;
+      botPayload.bot_name = profile.name;
+    }
+    if (profile.company_name) botPayload.store_name = profile.company_name;
+    if (profile.tone) botPayload.tone = profile.tone;
+    if (profile.avatar_url) botPayload.avatar_url = profile.avatar_url;
+    if (profile.support_phone) botPayload.support_phone = profile.support_phone;
+    if (profile.support_email) botPayload.support_email = profile.support_email;
+    if (profile.business_hours) botPayload.business_hours = profile.business_hours;
+    if (profile.website_url) botPayload.website_url = profile.website_url;
+    if (profile.company_address) botPayload.company_address = profile.company_address;
+    if (profile.pix_key) botPayload.pix_key = profile.pix_key;
+    if (profile.pix_owner) {
+      botPayload.pix_owner = profile.pix_owner;
+      botPayload.pix_name = profile.pix_owner;
+    }
+    if (typeof profile.notify_new_bookings === 'boolean') botPayload.notify_new_bookings = profile.notify_new_bookings;
+    if (profile.notify_phone) botPayload.notify_phone = profile.notify_phone;
+    if (typeof profile.play_audio_alerts === 'boolean') botPayload.play_audio_alerts = profile.play_audio_alerts;
+
+    await supabase.from('bot_config').upsert(botPayload, { onConflict: 'id' });
+
+    // 2. Gravar em settings (campo bot_profile JSONB)
+    const { data: curSettings } = await supabase.from('settings').select('bot_profile').eq('id', 'default').maybeSingle();
+    const mergedProfile: BotProfile = {
+      ...(curSettings?.bot_profile || {}),
+      ...profile,
+      updated_at: now,
+    } as BotProfile;
+
+    await supabase.from('settings').upsert({
+      id: 'default',
+      bot_profile: mergedProfile,
+      updated_at: now,
+    }, { onConflict: 'id' });
+
+    return mergedProfile;
+  } catch (err) {
+    console.warn('[Supabase] saveBotProfileToCloud error:', err);
+    return null;
+  }
+}
+
+export async function getSettingsFromCloud(): Promise<Settings | null> {
+  try {
+    const { data, error } = await supabase.from('settings').select('*').eq('id', 'default').maybeSingle();
+    if (error) throw error;
+    return data as Settings | null;
+  } catch (err) {
+    console.warn('[Supabase] getSettingsFromCloud error:', err);
+    return null;
+  }
+}
+
+export async function saveSettingsToCloud(settings: Partial<Settings>): Promise<Settings | null> {
+  try {
+    const payload = {
+      id: 'default',
+      ...settings,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabase.from('settings').upsert(payload, { onConflict: 'id' }).select().single();
+    if (error) throw error;
+    return data as Settings;
+  } catch (err) {
+    console.warn('[Supabase] saveSettingsToCloud error:', err);
+    return null;
+  }
+}
+
+export async function getCustomVariablesFromCloud(): Promise<CustomVariable[]> {
+  try {
+    const { data } = await supabase.from('bot_config').select('custom_variables').eq('id', 'default').maybeSingle();
+    if (Array.isArray(data?.custom_variables) && data.custom_variables.length > 0) {
+      return data.custom_variables as CustomVariable[];
+    }
+    const { data: setD } = await supabase.from('settings').select('custom_variables').eq('id', 'default').maybeSingle();
+    if (Array.isArray(setD?.custom_variables) && setD.custom_variables.length > 0) {
+      return setD.custom_variables as CustomVariable[];
+    }
+    return [];
+  } catch (err) {
+    console.warn('[Supabase] getCustomVariablesFromCloud error:', err);
+    return [];
+  }
+}
+
+export async function saveCustomVariablesToCloud(vars: CustomVariable[]): Promise<boolean> {
+  try {
+    const now = new Date().toISOString();
+    await Promise.all([
+      supabase.from('bot_config').upsert({ id: 'default', custom_variables: vars, updated_at: now }, { onConflict: 'id' }),
+      supabase.from('settings').upsert({ id: 'default', custom_variables: vars, updated_at: now }, { onConflict: 'id' }),
+    ]);
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] saveCustomVariablesToCloud error:', err);
+    return false;
   }
 }
 

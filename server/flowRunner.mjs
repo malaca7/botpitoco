@@ -1669,26 +1669,10 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
   // Record incoming message in real database
   recordRealMessage(cleanPhone, senderName, 'inbound', cleanInput, null, profilePicUrl);
 
-  // 🛡️ BLINDAGEM DE ATENDIMENTO HUMANO: Se a conversa estiver assumida por um atendente humano,
-  // o robô NÃO deve interferir, a menos que o cliente envie um comando de retorno ao bot (#bot, #reiniciar, menu)
-  const isBotResetCmd = ['#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio', '/bot', '/sair', '/menu', 'reiniciar'].includes(cleanInput.toLowerCase());
-
   const convId = `conv-${cleanPhone}`;
   const currentConv = db.conversations?.[convId] || Object.values(db.conversations || {}).find(c => 
     String(c?.phone || c?.contact_phone || '').replace(/\D/g, '') === cleanPhone
   );
-
-  if (isBotResetCmd && currentConv) {
-    console.log(`🤖 [FlowRunner] Comando "${cleanInput}" recebido. Devolvendo conversa ${cleanPhone} ao robô.`);
-    currentConv.status = 'bot';
-    currentConv.assigned_to = null;
-    currentConv.assigned_attendant_name = null;
-    currentConv.assigned_attendant_id = null;
-    if (db.sessions?.[cleanPhone]) delete db.sessions[cleanPhone];
-  } else if (currentConv && currentConv.status === 'human') {
-    console.log(`🛡️ [FlowRunner] Conversa ${cleanPhone} está em Atendimento Humano ("${currentConv.assigned_to || currentConv.assigned_attendant_name || 'Atendente'}"). O fluxo do robô não responderá.`);
-    return [];
-  }
 
   // Obter sessão atual para preservar fluxo em andamento se estiver aguardando resposta
   const existingSession = db.sessions?.[cleanPhone] || db.sessions?.[rawId];
@@ -1704,6 +1688,38 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
     cleanInput, 
     isSessionWaitingInput
   );
+
+  // 🛡️ BLINDAGEM INTELIGENTE DE ATENDIMENTO HUMANO:
+  // Se o cliente digitou uma palavra-chave registrada OU um comando de reinício/saudação, o robô assume imediatamente!
+  const isBotResetCmd = ['#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio', '/bot', '/sair', '/menu', 'reiniciar', 'oi', 'olá', 'ola', 'começar', 'comecar', 'voltar', 'bom dia', 'boa tarde', 'boa noite', 'start'].includes(cleanInput.toLowerCase());
+
+  if ((isKeywordMatch || isBotResetCmd) && currentConv) {
+    if (currentConv.status === 'human') {
+      console.log(`🤖 [FlowRunner] Palavra-chave ou comando "${cleanInput}" recebido. Devolvendo conversa ${cleanPhone} ao robô.`);
+    }
+    currentConv.status = 'bot';
+    currentConv.assigned_to = null;
+    currentConv.assigned_attendant_name = null;
+    currentConv.assigned_attendant_id = null;
+    if (db.sessions?.[cleanPhone]) delete db.sessions[cleanPhone];
+    saveDb(db);
+  } else if (currentConv && currentConv.status === 'human') {
+    // Verificar se o atendimento humano expirou por inatividade (>15 minutos)
+    const lastMsgTime = new Date(currentConv.last_message_at || currentConv.updated_at || 0).getTime();
+    const isHumanExpired = (Date.now() - lastMsgTime) > (15 * 60 * 1000);
+    if (isHumanExpired) {
+      console.log(`⏱️ [FlowRunner] Atendimento humano inativo (>15min) para ${cleanPhone}. Robô reassumindo fluxo.`);
+      currentConv.status = 'bot';
+      currentConv.assigned_to = null;
+      currentConv.assigned_attendant_name = null;
+      currentConv.assigned_attendant_id = null;
+      if (db.sessions?.[cleanPhone]) delete db.sessions[cleanPhone];
+      saveDb(db);
+    } else {
+      console.log(`🛡️ [FlowRunner] Conversa ${cleanPhone} está em Atendimento Humano ("${currentConv.assigned_to || currentConv.assigned_attendant_name || 'Atendente'}"). O fluxo do robô não responderá.`);
+      return [];
+    }
+  }
 
   if (!publishedFlow) {
     const defaultReply = `Olá, *${senderName}*! Recebi sua mensagem: "${cleanInput}".\n\nNo momento, não há nenhum fluxo ativo publicado no painel administrativo.`;
@@ -1829,9 +1845,10 @@ function parseCustomDateString(input) {
   // -------------------------------------------------------------
   // ⏳ CONTROLE DE COOLDOWN / DELAY DO ROBÔ PARA O MESMO NÚMERO
   // -------------------------------------------------------------
-  // Palavras-chave e comandos explícitos de reinício NUNCA sofrem cooldown.
+  // Palavras-chave, saudações (oi, olá), comandos de reinício e fluxos já concluídos NUNCA sofrem cooldown.
   // Usuário respondendo a uma pergunta / botão ativo também NÃO sofre cooldown.
-  const shouldBypassCooldown = isKeywordMatch || isExplicitReset || isWaitingForInput;
+  const isTerminalPrevious = Boolean(prevNode && !hasOutgoingEdges && !isWaitingForInput);
+  const shouldBypassCooldown = isKeywordMatch || isExplicitReset || isWaitingForInput || isGreeting || isTerminalPrevious || !session.currentNodeId;
 
   if (!shouldBypassCooldown) {
     const cooldownMinutes = Number(botProfile.flow_cooldown_minutes ?? db.settings?.flow_cooldown_minutes ?? 60);

@@ -271,24 +271,33 @@ async function startWhatsApp() {
 
         // 🛡️ BLINDAGEM DE ATENDIMENTO HUMANO & COMANDOS DE RETORNO AO ROBÔ
         const cleanInputLower = text.toLowerCase().trim();
-        const isBotResetCmd = ['#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio', '/bot', '/sair', '/menu', 'reiniciar'].includes(cleanInputLower);
+        const isBotResetCmd = [
+          '#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio',
+          '/bot', '/sair', '/menu', 'reiniciar', 'menu', 'inicio', 'início', 'começar', 'comecar',
+          'voltar', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'start'
+        ].includes(cleanInputLower);
 
         const convCheck = dbCheck.conversations?.[`conv-${clientPhone}`] || 
                           Object.values(dbCheck.conversations || {}).find(c => 
                             String(c?.phone || c?.contact_phone || '').replace(/\D/g, '') === clientPhone
                           );
 
-        if (isBotResetCmd && convCheck) {
-          console.log(`🤖 [Atendimento Robô] Comando "${text}" recebido. Devolvendo ${clientPhone} para o fluxo do robô.`);
-          convCheck.status = 'bot';
-          convCheck.assigned_to = null;
-          convCheck.assigned_attendant_name = null;
-          convCheck.assigned_attendant_id = null;
-          if (dbCheck.sessions?.[clientPhone]) delete dbCheck.sessions[clientPhone];
-          saveDb(dbCheck);
-        } else if (convCheck && convCheck.status === 'human') {
-          console.log(`🛡️ [Atendimento Humano Ativo] Cliente ${clientPhone} está em atendimento humano ("${convCheck.assigned_to || convCheck.assigned_attendant_name || 'Atendente'}"). Robô pausado.`);
-          continue;
+        if (convCheck && convCheck.status === 'human') {
+          const lastMsgTime = new Date(convCheck.last_message_at || convCheck.updated_at || 0).getTime();
+          const isHumanExpired = (Date.now() - lastMsgTime) > (15 * 60 * 1000);
+
+          if (isBotResetCmd || isHumanExpired) {
+            console.log(`🤖 [Atendimento Robô] ${isBotResetCmd ? `Comando/saudação "${text}"` : 'Inatividade (>15min)'} detectada. Reassumindo atendimento com o robô para ${clientPhone}.`);
+            convCheck.status = 'bot';
+            convCheck.assigned_to = null;
+            convCheck.assigned_attendant_name = null;
+            convCheck.assigned_attendant_id = null;
+            if (dbCheck.sessions?.[clientPhone]) delete dbCheck.sessions[clientPhone];
+            saveDb(dbCheck);
+          } else {
+            console.log(`🛡️ [Atendimento Humano Ativo] Cliente ${clientPhone} está em atendimento humano ("${convCheck.assigned_to || convCheck.assigned_attendant_name || 'Atendente'}"). Robô em pausa para não interferir.`);
+            continue;
+          }
         }
 
         // 🛡️ ANTI-BAN: Marcar mensagem como lida na telemetria oficial do WhatsApp
@@ -670,7 +679,11 @@ app.post(['/api/webhook', '/api/whatsapp/webhook'], async (req, res) => {
 
         // 3. Comandos de reset e transbordo
         const cleanInputLower = text.toLowerCase().trim();
-        const isBotResetCmd = ['#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio', '/bot', '/sair', '/menu', 'reiniciar'].includes(cleanInputLower);
+        const isBotResetCmd = [
+          '#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio',
+          '/bot', '/sair', '/menu', 'reiniciar', 'menu', 'inicio', 'início', 'começar', 'comecar',
+          'voltar', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'start'
+        ].includes(cleanInputLower);
 
         const dbCheck = loadDb();
         const convCheck = dbCheck.conversations?.[`conv-${clientPhone}`] || 
@@ -678,17 +691,22 @@ app.post(['/api/webhook', '/api/whatsapp/webhook'], async (req, res) => {
                             String(c?.phone || c?.contact_phone || '').replace(/\D/g, '') === clientPhone
                           );
 
-        if (isBotResetCmd && convCheck) {
-          console.log(`🤖 [Atendimento Robô] Comando "${text}" recebido. Devolvendo ${clientPhone} para o fluxo do robô.`);
-          convCheck.status = 'bot';
-          convCheck.assigned_to = null;
-          convCheck.assigned_attendant_name = null;
-          convCheck.assigned_attendant_id = null;
-          if (dbCheck.sessions?.[clientPhone]) delete dbCheck.sessions[clientPhone];
-          saveDb(dbCheck);
-        } else if (convCheck && convCheck.status === 'human') {
-          console.log(`🛡️ [Atendimento Humano Ativo] Cliente ${clientPhone} está em atendimento humano ("${convCheck.assigned_to || convCheck.assigned_attendant_name || 'Atendente'}"). Robô pausado.`);
-          continue;
+        if (convCheck && convCheck.status === 'human') {
+          const lastMsgTime = new Date(convCheck.last_message_at || convCheck.updated_at || 0).getTime();
+          const isHumanExpired = (Date.now() - lastMsgTime) > (15 * 60 * 1000);
+
+          if (isBotResetCmd || isHumanExpired) {
+            console.log(`🤖 [Atendimento Robô Meta] ${isBotResetCmd ? `Comando/saudação "${text}"` : 'Inatividade (>15min)'} detectada. Reassumindo atendimento com o robô para ${clientPhone}.`);
+            convCheck.status = 'bot';
+            convCheck.assigned_to = null;
+            convCheck.assigned_attendant_name = null;
+            convCheck.assigned_attendant_id = null;
+            if (dbCheck.sessions?.[clientPhone]) delete dbCheck.sessions[clientPhone];
+            saveDb(dbCheck);
+          } else {
+            console.log(`🛡️ [Atendimento Humano Ativo Meta] Cliente ${clientPhone} está em atendimento humano ("${convCheck.assigned_to || convCheck.assigned_attendant_name || 'Atendente'}"). Robô em pausa.`);
+            continue;
+          }
         }
 
         // 4. Executar fluxo ativo no bot
@@ -897,11 +915,90 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
 });
 
 // ==============================================================================
-// 1. CONFIGURAÇÕES & BOT PROFILE
-// ==============================================================================
-app.get('/api/bot-config', (req, res) => {
+// Helper para persistir botProfile e customVariables no Supabase de forma segura
+async function syncBotProfileToSupabase(profile) {
+  if (!supabaseServer) return;
+  try {
+    const now = new Date().toISOString();
+    const botPayload = { id: 'default', updated_at: now };
+    if (profile.name) { botPayload.name = profile.name; botPayload.bot_name = profile.name; }
+    if (profile.company_name) botPayload.store_name = profile.company_name;
+    if (profile.tone) botPayload.tone = profile.tone;
+    if (profile.avatar_url) botPayload.avatar_url = profile.avatar_url;
+    if (profile.support_phone) botPayload.support_phone = profile.support_phone;
+    if (profile.support_email) botPayload.support_email = profile.support_email;
+    if (profile.business_hours) botPayload.business_hours = profile.business_hours;
+    if (profile.website_url) botPayload.website_url = profile.website_url;
+    if (profile.company_address) botPayload.company_address = profile.company_address;
+    if (profile.pix_key) botPayload.pix_key = profile.pix_key;
+    if (profile.pix_owner) { botPayload.pix_owner = profile.pix_owner; botPayload.pix_name = profile.pix_owner; }
+    if (typeof profile.notify_new_bookings === 'boolean') botPayload.notify_new_bookings = profile.notify_new_bookings;
+    if (profile.notify_phone) botPayload.notify_phone = profile.notify_phone;
+    if (typeof profile.play_audio_alerts === 'boolean') botPayload.play_audio_alerts = profile.play_audio_alerts;
+
+    await Promise.all([
+      supabaseServer.from('bot_config').upsert(botPayload, { onConflict: 'id' }).catch(() => {}),
+      supabaseServer.from('settings').upsert({
+        id: 'default',
+        bot_profile: profile,
+        updated_at: now,
+      }, { onConflict: 'id' }).catch(() => {})
+    ]);
+  } catch (err) {
+    console.warn('[Supabase Sync] syncBotProfileToSupabase error:', err.message);
+  }
+}
+
+async function syncCustomVariablesToSupabase(vars) {
+  if (!supabaseServer) return;
+  try {
+    const now = new Date().toISOString();
+    await Promise.all([
+      supabaseServer.from('bot_config').upsert({ id: 'default', custom_variables: vars, updated_at: now }, { onConflict: 'id' }).catch(() => {}),
+      supabaseServer.from('settings').upsert({ id: 'default', custom_variables: vars, updated_at: now }, { onConflict: 'id' }).catch(() => {}),
+    ]);
+  } catch (err) {
+    console.warn('[Supabase Sync] syncCustomVariablesToSupabase error:', err.message);
+  }
+}
+
+async function syncSettingsToSupabase(settings) {
+  if (!supabaseServer) return;
+  try {
+    const payload = {
+      id: 'default',
+      ...settings,
+      updated_at: new Date().toISOString(),
+    };
+    await supabaseServer.from('settings').upsert(payload, { onConflict: 'id' }).catch(() => {});
+  } catch (err) {
+    console.warn('[Supabase Sync] syncSettingsToSupabase error:', err.message);
+  }
+}
+
+app.get('/api/bot-config', async (req, res) => {
   try {
     const db = loadDb();
+    if (supabaseServer) {
+      const { data } = await supabaseServer.from('bot_config').select('*').eq('id', 'default').maybeSingle().catch(() => ({ data: null }));
+      if (data) {
+        db.botProfile = {
+          ...(db.botProfile || {}),
+          name: data.name || data.bot_name || db.botProfile?.name,
+          company_name: data.store_name || db.botProfile?.company_name,
+          tone: data.tone || db.botProfile?.tone,
+          avatar_url: data.avatar_url || db.botProfile?.avatar_url,
+          support_phone: data.support_phone || db.botProfile?.support_phone,
+          support_email: data.support_email || db.botProfile?.support_email,
+          business_hours: data.business_hours || db.botProfile?.business_hours,
+          website_url: data.website_url || db.botProfile?.website_url,
+          company_address: data.company_address || db.botProfile?.company_address,
+          pix_key: data.pix_key || db.botProfile?.pix_key,
+          pix_owner: data.pix_owner || data.pix_name || db.botProfile?.pix_owner,
+        };
+        saveDb(db);
+      }
+    }
     res.json(db.botProfile || {});
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -911,8 +1008,9 @@ app.get('/api/bot-config', (req, res) => {
 app.put('/api/bot-config', (req, res) => {
   try {
     const db = loadDb();
-    db.botProfile = { ...(db.botProfile || {}), ...req.body };
+    db.botProfile = { ...(db.botProfile || {}), ...req.body, updated_at: new Date().toISOString() };
     saveDb(db);
+    syncBotProfileToSupabase(db.botProfile);
     res.json({ success: true, botProfile: db.botProfile });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -922,17 +1020,25 @@ app.put('/api/bot-config', (req, res) => {
 app.post('/api/bot-config', (req, res) => {
   try {
     const db = loadDb();
-    db.botProfile = { ...(db.botProfile || {}), ...req.body };
+    db.botProfile = { ...(db.botProfile || {}), ...req.body, updated_at: new Date().toISOString() };
     saveDb(db);
+    syncBotProfileToSupabase(db.botProfile);
     res.json({ success: true, botProfile: db.botProfile });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', async (req, res) => {
   try {
     const db = loadDb();
+    if (supabaseServer) {
+      const { data } = await supabaseServer.from('settings').select('*').eq('id', 'default').maybeSingle().catch(() => ({ data: null }));
+      if (data) {
+        db.settings = { ...(db.settings || {}), ...data };
+        saveDb(db);
+      }
+    }
     res.json(db.settings || {});
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -944,6 +1050,7 @@ app.put('/api/settings', (req, res) => {
     const db = loadDb();
     db.settings = { ...(db.settings || {}), ...req.body, updated_at: new Date().toISOString() };
     saveDb(db);
+    syncSettingsToSupabase(db.settings);
     res.json({ success: true, settings: db.settings });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -955,6 +1062,7 @@ app.post('/api/settings', (req, res) => {
     const db = loadDb();
     db.settings = { ...(db.settings || {}), ...req.body, updated_at: new Date().toISOString() };
     saveDb(db);
+    syncSettingsToSupabase(db.settings);
     res.json({ success: true, settings: db.settings });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2457,9 +2565,16 @@ app.delete('/api/canned-replies/:id', (req, res) => {
 // ==============================================================================
 // 13. VARIÁVEIS CUSTOMIZADAS
 // ==============================================================================
-app.get('/api/custom-variables', (req, res) => {
+app.get('/api/custom-variables', async (req, res) => {
   try {
     const db = loadDb();
+    if (supabaseServer && (!db.customVariables || db.customVariables.length === 0)) {
+      const { data } = await supabaseServer.from('bot_config').select('custom_variables').eq('id', 'default').maybeSingle().catch(() => ({ data: null }));
+      if (Array.isArray(data?.custom_variables) && data.custom_variables.length > 0) {
+        db.customVariables = data.custom_variables;
+        saveDb(db);
+      }
+    }
     res.json(db.customVariables || []);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2482,6 +2597,7 @@ app.post('/api/custom-variables', (req, res) => {
       db.customVariables.push(newV);
     }
     saveDb(db);
+    syncCustomVariablesToSupabase(db.customVariables);
     res.json({ success: true, variable: newV });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2492,8 +2608,9 @@ app.delete('/api/custom-variables/:id', (req, res) => {
   try {
     const db = loadDb();
     if (db.customVariables) {
-      db.customVariables = db.customVariables.filter(v => v.id !== req.params.id);
+      db.customVariables = db.customVariables.filter(v => v.id !== req.params.id && v.key !== req.params.id);
       saveDb(db);
+      syncCustomVariablesToSupabase(db.customVariables);
     }
     res.json({ success: true, message: `Variável ${req.params.id} removida` });
   } catch (err) {
@@ -2645,9 +2762,11 @@ app.listen(PORT, HOST, async () => {
   setTimeout(async () => {
     try {
       if (supabaseServer) {
-        const [flowsRes, clientsRes] = await Promise.all([
+        const [flowsRes, clientsRes, botRes, setRes] = await Promise.all([
           supabaseServer.from('flows').select('*'),
           supabaseServer.from('clients').select('*'),
+          supabaseServer.from('bot_config').select('*').eq('id', 'default').maybeSingle().catch(() => ({ data: null })),
+          supabaseServer.from('settings').select('*').eq('id', 'default').maybeSingle().catch(() => ({ data: null })),
         ]);
         const db = loadDb();
         if (Array.isArray(flowsRes.data)) {
@@ -2661,8 +2780,38 @@ app.listen(PORT, HOST, async () => {
           });
           db.contacts = cloudMap;
         }
+        if (botRes.data || setRes.data?.bot_profile) {
+          const bData = botRes.data || {};
+          const setProfile = setRes.data?.bot_profile || {};
+          db.botProfile = {
+            ...(db.botProfile || {}),
+            ...setProfile,
+            name: bData.name || bData.bot_name || setProfile.name || db.botProfile?.name || 'Pitoco Bot',
+            company_name: bData.store_name || setProfile.company_name || db.botProfile?.company_name || 'Pitoco de Gente',
+            tone: bData.tone || setProfile.tone || db.botProfile?.tone || 'Amigável e Acolhedor',
+            avatar_url: bData.avatar_url || setProfile.avatar_url || db.botProfile?.avatar_url || '',
+            support_phone: bData.support_phone || setProfile.support_phone || db.botProfile?.support_phone || '',
+            support_email: bData.support_email || setProfile.support_email || db.botProfile?.support_email || '',
+            business_hours: bData.business_hours || setProfile.business_hours || db.botProfile?.business_hours || '08:00 às 18:00',
+            website_url: bData.website_url || setProfile.website_url || db.botProfile?.website_url || 'https://pitoco.malaca.com.br',
+            company_address: bData.company_address || setProfile.company_address || db.botProfile?.company_address || '',
+            pix_key: bData.pix_key || setProfile.pix_key || db.botProfile?.pix_key || '',
+            pix_owner: bData.pix_owner || bData.pix_name || setProfile.pix_owner || db.botProfile?.pix_owner || '',
+            notify_new_bookings: typeof bData.notify_new_bookings === 'boolean' ? bData.notify_new_bookings : (setProfile.notify_new_bookings ?? true),
+            notify_phone: bData.notify_phone || setProfile.notify_phone || db.botProfile?.notify_phone || '',
+            play_audio_alerts: typeof bData.play_audio_alerts === 'boolean' ? bData.play_audio_alerts : (setProfile.play_audio_alerts ?? true),
+          };
+        }
+        if (setRes.data) {
+          db.settings = { ...(db.settings || {}), ...setRes.data };
+        }
+        if (Array.isArray(botRes.data?.custom_variables) && botRes.data.custom_variables.length > 0) {
+          db.customVariables = botRes.data.custom_variables;
+        } else if (Array.isArray(setRes.data?.custom_variables) && setRes.data.custom_variables.length > 0) {
+          db.customVariables = setRes.data.custom_variables;
+        }
         saveDb(db);
-        console.log(`[Startup Sync] ☁️ Sincronização inicial concluída com Supabase: ${db.flows?.length || 0} fluxos e ${Object.keys(db.contacts || {}).length} clientes.`);
+        console.log(`[Startup Sync] ☁️ Sincronização inicial concluída com Supabase: ${db.flows?.length || 0} fluxos, ${Object.keys(db.contacts || {}).length} clientes, perfil do bot ("${db.botProfile?.name || 'Pitoco Bot'}") e ${db.customVariables?.length || 0} variáveis customizadas.`);
       }
     } catch (e) {
       console.warn('[Startup Sync] Aviso ao sincronizar com Supabase no início:', e.message);
