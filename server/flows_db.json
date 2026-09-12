@@ -767,8 +767,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "message",
         "position": {
-          "x": 530,
-          "y": 1000
+          "x": 580,
+          "y": 1440
         },
         "data": {
           "label": "Enviar Mensagem",
@@ -786,8 +786,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "human_handoff",
         "position": {
-          "x": 990,
-          "y": 2475
+          "x": 1060,
+          "y": 2975
         },
         "data": {
           "label": "Transferir para Humano",
@@ -805,8 +805,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "question",
         "position": {
-          "x": 315,
-          "y": 540
+          "x": 100,
+          "y": 750
         },
         "data": {
           "label": "Pergunta & Resposta",
@@ -825,8 +825,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "update_contact",
         "position": {
-          "x": 315,
-          "y": 770
+          "x": 100,
+          "y": 1060
         },
         "data": {
           "label": "Salvar / Vincular Dados",
@@ -849,8 +849,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "show_catalog",
         "position": {
-          "x": 180,
-          "y": 2460
+          "x": 100,
+          "y": 2975
         },
         "data": {
           "label": "Vitrine da Loja Virtual",
@@ -869,7 +869,7 @@
         "flow_id": "flow-pitoco-001",
         "type": "trigger",
         "position": {
-          "x": 530,
+          "x": 580,
           "y": 100
         },
         "data": {
@@ -889,8 +889,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "measure_guide",
         "position": {
-          "x": 555,
-          "y": 2385
+          "x": 580,
+          "y": 2975
         },
         "data": {
           "label": "Guia de Medidas (RN a 3 Anos)",
@@ -907,8 +907,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "check_contact",
         "position": {
-          "x": 530,
-          "y": 300
+          "x": 580,
+          "y": 355
         },
         "data": {
           "label": "Verificar Contato (Novo vs Salvo)",
@@ -923,8 +923,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "message",
         "position": {
-          "x": 530,
-          "y": 1220
+          "x": 580,
+          "y": 1755
         },
         "data": {
           "label": "Enviar Mensagem",
@@ -942,8 +942,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "store_selector",
         "position": {
-          "x": 530,
-          "y": 1440
+          "x": 580,
+          "y": 2070
         },
         "data": {
           "label": "Escolha de Loja / Filial",
@@ -961,8 +961,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "buttons",
         "position": {
-          "x": 540,
-          "y": 1950
+          "x": 580,
+          "y": 2525
         },
         "data": {
           "label": "Botões Interativos WhatsApp",

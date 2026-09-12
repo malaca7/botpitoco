@@ -91,10 +91,15 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
 
   // Lojas reais cadastradas no painel admin para conexões e saídas dinâmicas
   const [adminStores, setAdminStores] = useState<Store[]>([]);
+  const adminStoresRef = useRef<Store[]>([]);
+  adminStoresRef.current = adminStores;
 
   useEffect(() => {
     StorageService.getStores().then((stList) => {
-      if (Array.isArray(stList)) setAdminStores(stList);
+      if (Array.isArray(stList)) {
+        setAdminStores(stList);
+        adminStoresRef.current = stList;
+      }
     }).catch(() => {});
   }, []);
 
@@ -528,83 +533,95 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
     [screenToFlowPosition, spawnNodeAtPosition]
   );
 
-  // Advanced Pure Function for Top-to-Bottom Auto-Layout (Generous 110px Spacing & Strict Downward Hierarchy)
+  // Advanced Pure Function for Top-to-Bottom Auto-Layout (Zero Overlaps, Generous Vertical & Horizontal Spacing)
   const computeOrganizedNodes = useCallback((currentNodes: Node[], currentEdges: Edge[]): Node[] => {
     if (!currentNodes || currentNodes.length === 0) return currentNodes;
 
-    // 1. Dynamic Height Estimator
+    // 1. Accurate Realistic Height Estimator with Dynamic Sizing
     const getNodeHeight = (n: Node): number => {
       const type = n.data?.nodeType || n.type;
       const cfg = (n.data as any)?.config || {};
       switch (type) {
         case 'trigger':
-          return 90;
+          return 120;
         case 'message': {
           const text = cfg.text || '';
-          return text.length > 80 ? 140 : 110;
+          return text.length > 100 ? 210 : 180;
         }
         case 'buttons': {
           const btnCount = (cfg.buttons || []).length || 2;
-          return 110 + Math.min(btnCount, 4) * 32;
+          return 180 + Math.min(btnCount, 6) * 45;
         }
         case 'question':
-          return 120;
+          return 175;
         case 'check_contact':
-          return 130;
+          return 260;
+        case 'update_contact':
+        case 'save_contact':
+        case 'client_upsert':
+          return 245;
+        case 'client_lookup':
+          return 220;
         case 'services_catalog':
         case 'select_service':
         case 'show_services':
-          return 140;
+          return 250;
         case 'schedule_contact':
         case 'select_time_slot':
-          return 140;
         case 'ask_date':
         case 'select_date':
-          return 130;
         case 'confirm_booking':
-          return 140;
-        case 'store_selector':
-        case 'shipping_calculator':
-          return 145;
+          return 230;
+        case 'store_selector': {
+          const storeCount = Array.isArray(cfg.selectedStores) && cfg.selectedStores.length > 0
+            ? cfg.selectedStores.length
+            : (adminStoresRef.current.length > 0 ? adminStoresRef.current.length : 3);
+          return 250 + Math.min(storeCount, 6) * 35;
+        }
         case 'show_catalog':
         case 'select_product':
-        case 'vip_consultation':
-          return 140;
+          return 350;
+        case 'shipping_calculator':
+          return 340;
         case 'pix_payment':
+          return 290;
         case 'cart_order':
-        case 'promotional_coupon':
-          return 135;
+          return 280;
         case 'measure_guide':
         case 'layette_checklist':
+          return 340;
+        case 'vip_consultation':
+          return 280;
         case 'order_tracking':
-          return 125;
+        case 'promotional_coupon':
+          return 260;
         case 'condition':
-          return 130;
+          return 220;
         case 'variable': {
           const count = Array.isArray(cfg.assignments) ? cfg.assignments.length : 1;
-          return 95 + Math.min(count, 3) * 25;
+          return 160 + Math.min(count, 5) * 30;
         }
         case 'ai_agent':
-          return 120;
+          return 190;
         case 'human_handoff':
-          return 110;
+          return 160;
         case 'delay':
-          return 85;
+          return 130;
         case 'media':
-          return 120;
+          return 190;
         case 'end_flow':
         case 'finish_flow':
         case 'end':
-          return 85;
+          return 140;
         default:
-          return 120;
+          return 180;
       }
     };
 
-    const NODE_WIDTH = 320;
-    const HORIZONTAL_GAP = 110; // Espaço ampliado e arejado entre as colunas dos nós
-    const VERTICAL_GAP = 110;   // Espaço ampliado e arejado entre as linhas dos nós
-    const COL_WIDTH = NODE_WIDTH + HORIZONTAL_GAP; // 430px
+    const NODE_WIDTH = 340;
+    const HORIZONTAL_GAP = 140; // Espaço ampliado e arejado entre as colunas dos nós
+    const VERTICAL_GAP = 135;   // Espaço ampliado e arejado entre as linhas dos nós
+    const COL_WIDTH = NODE_WIDTH + HORIZONTAL_GAP; // 480px
     const START_X = 100;
     const START_Y = 100;
     const MAIN_CENTER_X = 600;
@@ -671,7 +688,6 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
       state.set(u, GRAY);
       for (const v of allChildrenMap.get(u) || []) {
         if (state.get(v) === GRAY) {
-          // v is an active ancestor on DFS recursion stack => back-edge!
           backEdges.add(`${u}->${v}`);
         } else {
           if (!forwardChildrenMap.get(u)!.includes(v)) {
@@ -693,7 +709,6 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
     });
 
     // 4. Longest-Path Layering on Forward DAG
-    // Strictly guarantees that for every forward connection, rank[target] >= rank[source] + 1
     const dagInDegree = new Map<string, number>();
     currentNodes.forEach((n) => dagInDegree.set(n.id, 0));
     for (const [, children] of forwardChildrenMap.entries()) {
@@ -722,12 +737,11 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
       }
     }
 
-    // Handle any disconnected components
     currentNodes.forEach((n) => {
       if (!rankMap.has(n.id)) rankMap.set(n.id, 0);
     });
 
-    // Rank Compression: eliminate any empty gaps while strictly preserving rank(target) > rank(source)
+    // Rank Compression
     const distinctRanks = Array.from(new Set(rankMap.values())).sort((a, b) => a - b);
     const compressedRankMap = new Map<number, number>();
     distinctRanks.forEach((oldR, newR) => {
@@ -745,7 +759,7 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
       rows[r].push(n);
     });
 
-    // 5. Compute Y position for each row with uniform VERTICAL_GAP
+    // 5. Compute Y position for each row with accurate heights and parent clearance
     const rowYPositions = new Map<number, number>();
     let currentY = START_Y;
     for (let r = 0; r < totalRows; r++) {
@@ -753,8 +767,36 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
       const rowNodes = rows[r];
       const maxHeightInRow = rowNodes.length > 0
         ? Math.max(...rowNodes.map(getNodeHeight))
-        : 110;
+        : 140;
       currentY += maxHeightInRow + VERTICAL_GAP;
+    }
+
+    // Node-level parent clearance check:
+    // Ensures row r's Y is strictly greater than max(Y_p + height_p + VERTICAL_GAP) for all parents
+    for (let r = 1; r < totalRows; r++) {
+      const rowNodes = rows[r];
+      let minRequiredY = rowYPositions.get(r) || START_Y;
+      rowNodes.forEach((n) => {
+        const parents = forwardParentMap.get(n.id) || [];
+        parents.forEach((pId) => {
+          const pNode = currentNodes.find((nd) => nd.id === pId);
+          const pRank = rankMap.get(pId);
+          if (pNode && pRank !== undefined) {
+            const pY = rowYPositions.get(pRank) || START_Y;
+            const pH = getNodeHeight(pNode);
+            const neededY = pY + pH + VERTICAL_GAP;
+            if (neededY > minRequiredY) {
+              minRequiredY = neededY;
+            }
+          }
+        });
+      });
+      if (minRequiredY > (rowYPositions.get(r) || 0)) {
+        const diff = minRequiredY - (rowYPositions.get(r) || 0);
+        for (let subR = r; subR < totalRows; subR++) {
+          rowYPositions.set(subR, (rowYPositions.get(subR) || 0) + diff);
+        }
+      }
     }
 
     // Check if a node leads to a back-edge loop back to an ancestor
@@ -780,28 +822,33 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
       const pCfg = (parent.data as any)?.config || {};
       const handle = edgeHandleMap.get(`${parent.id}->${childId}`) || '';
 
+      // If parent only has 1 unique child in the forward graph, no horizontal branch offset needed
+      const uniqueChildren = Array.from(new Set(forwardChildrenMap.get(parent.id) || []));
+      if (uniqueChildren.length <= 1) {
+        return 0;
+      }
+
       // Check contact: 2 handles: is_new (left) vs is_existing (right)
       if (pType === 'check_contact' || handle === 'is_new' || handle === 'is_existing') {
         if (handle === 'is_new' || handle.includes('new') || handle === 'true') {
-          return -COL_WIDTH / 2;
+          return -COL_WIDTH;
         }
         if (handle === 'is_existing' || handle.includes('exist') || handle === 'false') {
-          return COL_WIDTH / 2;
+          return COL_WIDTH;
         }
       }
 
       // Store selector: handles dinâmicos para lojas reais
       if (pType === 'store_selector' || handle.startsWith('store_') || handle.startsWith('store-')) {
-        const storesList = adminStores.length > 0 ? adminStores : [
+        const currentStores = adminStoresRef.current.length > 0 ? adminStoresRef.current : [
           { id: 'store-001', slug: 'matriz' },
           { id: 'store-002', slug: 'ipojuca' },
           { id: 'store-003', slug: 'ecommerce' },
         ];
-        const storeIdx = storesList.findIndex((s: any) => s.id === handle || `store_${s.slug}` === handle || s.slug === handle);
+        const storeIdx = currentStores.findIndex((s: any) => s.id === handle || `store_${s.slug}` === handle || s.slug === handle);
         if (storeIdx >= 0) {
-          const total = Math.max(storesList.length, 1);
-          const step = (COL_WIDTH * 2) / (total + 1);
-          return -COL_WIDTH + step * (storeIdx + 1);
+          const total = Math.max(currentStores.length, 1);
+          return (storeIdx - (total - 1) / 2) * COL_WIDTH;
         }
       }
 
@@ -844,7 +891,7 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
         return COL_WIDTH;
       }
 
-      // Buttons: 2 or 3 buttons
+      // Buttons: 2, 3 or more buttons
       if (pType === 'buttons' || handle.startsWith('btn_')) {
         const btnCount = (pCfg.buttons || []).length || 2;
         let btnIdx = 0;
@@ -856,12 +903,9 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
       }
 
       // Multiple generic children
-      const children = forwardChildrenMap.get(parent.id) || [];
-      if (children.length > 1) {
-        const idx = children.indexOf(childId);
-        if (idx !== -1) {
-          return (idx - (children.length - 1) / 2) * COL_WIDTH;
-        }
+      const idx = uniqueChildren.indexOf(childId);
+      if (idx !== -1) {
+        return (idx - (uniqueChildren.length - 1) / 2) * COL_WIDTH;
       }
 
       return 0;
@@ -929,19 +973,43 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
     const minX = allXs.length > 0 ? Math.min(...allXs) : START_X;
     const shiftX = START_X - minX;
 
-    return currentNodes.map((n) => {
+    // 9. Position Assignment with 2D Collision Safety Pass
+    const positionedNodes = currentNodes.map((n) => {
       const rank = rankMap.get(n.id) ?? 0;
       const rawX = xPositions.get(n.id);
       const rawY = rowYPositions.get(rank);
 
       const posX = (Number.isFinite(rawX) ? rawX! : (MAIN_CENTER_X - NODE_WIDTH / 2)) + shiftX;
-      const posY = Number.isFinite(rawY) ? rawY! : (START_Y + rank * (110 + VERTICAL_GAP));
+      const posY = Number.isFinite(rawY) ? rawY! : (START_Y + rank * (140 + VERTICAL_GAP));
 
       return {
         ...n,
         position: { x: Math.round(posX), y: Math.round(posY) },
       };
     });
+
+    // Final Overlap Verification & Separation
+    for (let i = 0; i < positionedNodes.length; i++) {
+      for (let j = i + 1; j < positionedNodes.length; j++) {
+        const nodeA = positionedNodes[i];
+        const nodeB = positionedNodes[j];
+        const hA = getNodeHeight(nodeA);
+        const hB = getNodeHeight(nodeB);
+
+        const xOverlap = Math.max(0, Math.min(nodeA.position.x + NODE_WIDTH, nodeB.position.x + NODE_WIDTH) - Math.max(nodeA.position.x, nodeB.position.x));
+        const yOverlap = Math.max(0, Math.min(nodeA.position.y + hA, nodeB.position.y + hB) - Math.max(nodeA.position.y, nodeB.position.y));
+
+        if (xOverlap > 0 && yOverlap > 0) {
+          if (nodeB.position.y >= nodeA.position.y) {
+            nodeB.position.y = nodeA.position.y + hA + VERTICAL_GAP;
+          } else {
+            nodeA.position.y = nodeB.position.y + hB + VERTICAL_GAP;
+          }
+        }
+      }
+    }
+
+    return positionedNodes;
   }, []);
 
   // Track latest nodes, edges, and flow in refs for exit auto-organize
