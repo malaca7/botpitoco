@@ -802,3 +802,35 @@ export async function getFlowGraph(flowId: string): Promise<{ nodes: FlowNode[];
   }
   return null;
 }
+
+export function subscribeToFlows(onUpdate: () => void) {
+  const channel = supabase
+    .channel('all_flows_realtime')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'flows',
+      },
+      () => {
+        onUpdate();
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'flow_nodes',
+      },
+      () => {
+        onUpdate();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}

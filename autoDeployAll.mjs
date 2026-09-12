@@ -96,9 +96,12 @@ async function main() {
       execSync('git add -A', { cwd: __dirname, stdio: 'pipe' });
       const status = execSync('git status --porcelain', { cwd: __dirname, encoding: 'utf8' }).trim();
       if (status.length > 0) {
-        console.log('📌 Mudanças detectadas. Criando commit...');
-        execSync('git commit -m "chore(perf): otimizacao do pipeline de build/deploy e limpeza de arquivos"', { cwd: __dirname, stdio: 'inherit' });
-        console.log('✅ Commit criado.');
+        const msgArgIdx = process.argv.findIndex(a => a === '-m' || a === '--msg');
+        const commitMsg = msgArgIdx !== -1 && process.argv[msgArgIdx + 1]
+          ? process.argv[msgArgIdx + 1]
+          : "feat(flows): auto-sincronizacao em tempo real de fluxos e correcao Input not defined";
+        execSync(`git commit -m "${commitMsg}"`, { cwd: __dirname, stdio: 'inherit' });
+        console.log(`✅ Commit criado: "${commitMsg}"`);
       } else {
         console.log('ℹ️ Nenhuma alteração pendente de código para commit.');
       }

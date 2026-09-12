@@ -32,6 +32,7 @@ import {
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
+import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { useToast } from '../contexts/ToastContext';
 import { FlowEditorPage } from '../pages/flows/FlowEditorPage';
@@ -122,9 +123,9 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
     }
   }, []);
 
-  // Sincronizar diretamente com o banco de dados
-  const handleSyncDatabase = async () => {
-    setIsSyncing(true);
+  // Auto-sincronização contínua em segundo plano com o banco de dados e servidor
+  const autoSyncWithDatabase = useCallback(async (showIndicator = false) => {
+    if (showIndicator) setIsSyncing(true);
     try {
       const refreshedFlows = await StorageService.syncWithDatabase();
       
@@ -149,13 +150,12 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
       });
 
       setFlows(sorted);
-      success('Banco Sincronizado!', 'Todos os fluxos e nós foram sincronizados com o banco de dados e robô.');
     } catch (err: any) {
-      toastError('Erro ao sincronizar', err.message || 'Falha ao sincronizar com o banco.');
+      console.warn('[FlowBuilderView] Auto-sync em segundo plano:', err?.message || err);
     } finally {
-      setIsSyncing(false);
+      if (showIndicator) setIsSyncing(false);
     }
-  };
+  }, []);
 
   // Drag & Drop Handlers
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -200,13 +200,29 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
 
   useEffect(() => {
     loadData(false);
+    // Auto-sincronização inicial em segundo plano
+    autoSyncWithDatabase(false);
 
-    // Sincronização e atualização contínua em tempo real a cada 3.5 segundos
+    // 1. Inscrição em tempo real no Supabase (Realtime Postgres Changes)
+    const unsubscribeRealtime = StorageService.subscribeToFlows(() => {
+      if (!isFlowModalOpen && !isSavingFlow) {
+        autoSyncWithDatabase(true);
+      }
+    });
+
+    // 2. Atualização local contínua a cada 4 segundos
     const syncTimer = setInterval(() => {
       if (!isFlowModalOpen && !isSavingFlow) {
         loadData(true);
       }
-    }, 3500);
+    }, 4000);
+
+    // 3. Sincronização periódica profunda com o banco a cada 15 segundos
+    const deepSyncTimer = setInterval(() => {
+      if (!isFlowModalOpen && !isSavingFlow) {
+        autoSyncWithDatabase(false);
+      }
+    }, 15000);
 
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'pitoco_flows') {
@@ -216,10 +232,12 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
+      unsubscribeRealtime();
       clearInterval(syncTimer);
+      clearInterval(deepSyncTimer);
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [loadData, isFlowModalOpen, isSavingFlow]);
+  }, [loadData, autoSyncWithDatabase, isFlowModalOpen, isSavingFlow]);
 
   // Atualizar cor do fluxo diretamente pelo card
   const handleUpdateFlowColor = async (flow: Flow, newColor: string) => {
@@ -526,17 +544,19 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleSyncDatabase}
-            disabled={isSyncing}
-            className="border-white/10 hover:border-pitoco-blue/50 text-slate-200 hover:text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-2 bg-dark-800/80 hover:bg-dark-800 transition-all shadow-sm"
-            title="Sincronizar todos os fluxos e nós diretamente com o banco de dados e servidor"
+          {/* Indicador de Auto-Sincronização em Tempo Real (Substitui o botão manual) */}
+          <div 
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold shadow-xs transition-all select-none"
+            title="Sincronização automática contínua em segundo plano com o banco de dados e robô"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-pitoco-blue ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? 'Sincronizando...' : 'Sincronizar Banco'}
-          </Button>
+            <span className="relative flex h-2 w-2">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 ${isSyncing ? 'opacity-90 duration-700' : 'opacity-60'}`}></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+            </span>
+            <span className="font-mono text-[11px]">
+              {isSyncing ? 'Sincronizando em 2º plano...' : 'Banco Conectado em Tempo Real'}
+            </span>
+          </div>
 
           <Button
             size="sm"

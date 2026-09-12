@@ -1434,6 +1434,13 @@ export const StorageService = {
     return this.getFlows();
   },
 
+  subscribeToFlows(callback: () => void) {
+    if (SupabaseService.isSupabaseReady && typeof (SupabaseService as any).subscribeToFlows === 'function') {
+      return (SupabaseService as any).subscribeToFlows(callback);
+    }
+    return () => {};
+  },
+
   // ==============================================================================
   // 10. GESTÃO DE ACESSOS (USUÁRIO APENAS LETRAS / SENHA APENAS NÚMEROS)
   // ==============================================================================

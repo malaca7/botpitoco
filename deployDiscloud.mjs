@@ -141,14 +141,33 @@ export async function deployToDiscloud() {
     }
     console.log('✅ Commit processado pela Discloud.');
 
-    console.log(`🔄 [Discloud 3/3] Reiniciando container (${APP_ID})...`);
+    console.log(`🔄 [Discloud 3/3] Reconstruindo (rebuild) e reiniciando container (${APP_ID})...`);
     // Pausa minima de 1.5s para descompressao na nuvem
     await wait(1500);
 
-    await fetch(`https://api.discloud.app/v2/app/${APP_ID}/restart`, {
-      method: 'PUT',
-      headers: { 'api-token': DISCLOUD_TOKEN },
-    }).catch(() => {});
+    try {
+      const rebuildRes = await fetch(`https://api.discloud.app/v2/app/${APP_ID}/rebuild`, {
+        method: 'PUT',
+        headers: { 'api-token': DISCLOUD_TOKEN },
+      });
+      const rebuildJson = await rebuildRes.json().catch(() => ({}));
+      console.log(`🔨 [Discloud] Rebuild: ${rebuildJson.message || 'OK'}`);
+    } catch (e) {
+      console.warn('⚠️ [Discloud] Aviso no rebuild:', e.message);
+    }
+
+    await wait(1500);
+
+    try {
+      const restartRes = await fetch(`https://api.discloud.app/v2/app/${APP_ID}/restart`, {
+        method: 'PUT',
+        headers: { 'api-token': DISCLOUD_TOKEN },
+      });
+      const restartJson = await restartRes.json().catch(() => ({}));
+      console.log(`⚡ [Discloud] Restart: ${restartJson.message || 'OK'}`);
+    } catch (e) {
+      console.warn('⚠️ [Discloud] Aviso no restart:', e.message);
+    }
 
     // Polling ativo inteligente de health check (max 6s, checa a cada 1s)
     let isHealthy = false;
