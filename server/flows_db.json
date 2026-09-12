@@ -832,9 +832,9 @@
           "label": "Salvar / Vincular Dados",
           "config": {
             "tags": "Cliente WhatsApp, Bot",
-            "nameField": "{{nome_cliente}}n",
+            "nameField": "{{nome_clientenovo}}",
             "phoneMode": "sender",
-            "contactName": "{{nome_cliente}}",
+            "contactName": "{{nome_clientenovo}}",
             "phoneVarName": "telefone_whatsapp",
             "saveProfilePicture": true,
             "updateActiveConversation": true
@@ -1395,7 +1395,7 @@
     },
     "168650497613858": {
       "id": "contact-168650497613858",
-      "name": "Rogerio",
+      "name": "Malaquias",
       "phone": "168650497613858",
       "tags": [
         "Lead",
@@ -1406,12 +1406,13 @@
       "status": "active",
       "notes": "Cadastrado e atualizado pelo fluxo do bot",
       "custom_fields": {
-        "nome_cliente": "Rogerio"
+        "nome_cliente": "Malaquias",
+        "nome_clientenovo": "Malaquias"
       },
       "is_registered": true,
       "created_at": "2026-09-09T00:01:00.751Z",
       "last_interaction": "2026-09-09T00:01:18.583Z",
-      "updated_at": "2026-09-09T00:01:18.870Z",
+      "updated_at": "2026-09-12T20:55:11.967Z",
       "whatsapp_pushname": "Rogerio"
     },
     "81999999999": {
@@ -1434,12 +1435,33 @@
       "last_interaction": "2026-09-12T20:01:08.781Z",
       "updated_at": "2026-09-12T20:01:09.084Z",
       "whatsapp_pushname": "Maria Teste"
+    },
+    "558196138924": {
+      "id": "contact-558196138924",
+      "name": "Malaquias",
+      "phone": "558196138924",
+      "status": "active",
+      "is_registered": true,
+      "tags": [
+        "Lead",
+        "Cliente",
+        "Cliente WhatsApp",
+        "Bot"
+      ],
+      "notes": "Cadastrado e atualizado pelo fluxo do bot",
+      "custom_fields": {
+        "nome_clientenovo": "Malaquias",
+        "nome_cliente": "Malaquias"
+      },
+      "created_at": "2026-09-12T20:55:11.966Z",
+      "updated_at": "2026-09-12T20:55:11.967Z",
+      "last_interaction": "2026-09-12T20:55:11.967Z"
     }
   },
   "conversations": {
     "conv-558196138924": {
       "id": "conv-558196138924",
-      "contact_name": "oi",
+      "contact_name": "Malaquias",
       "contact_phone": "558196138924",
       "phone": "168650497613858",
       "last_message": "oi",
@@ -1448,13 +1470,13 @@
       "store_name": "Pitoco de Gente",
       "contact_id": "contact-558196138924",
       "assigned_to": "Malaca",
-      "updated_at": "2026-09-09T00:20:37.691Z",
+      "updated_at": "2026-09-12T20:55:11.967Z",
       "assigned_attendant_id": null,
       "assigned_attendant_name": "Malaca"
     },
     "conv-168650497613858": {
       "id": "conv-168650497613858",
-      "contact_name": "rogerio mlc",
+      "contact_name": "Malaquias",
       "contact_phone": "168650497613858",
       "phone": "168650497613858",
       "last_message": "Oi",
@@ -1463,7 +1485,7 @@
       "store_name": "Pitoco de Gente",
       "assigned_attendant_id": "user-1788477817013",
       "assigned_to": "Jefferson",
-      "updated_at": "2026-09-09T00:20:35.928Z"
+      "updated_at": "2026-09-12T20:55:11.967Z"
     },
     "conv-81999999999": {
       "id": "conv-81999999999",

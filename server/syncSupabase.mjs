@@ -140,6 +140,16 @@ export async function syncToSupabase(dbOverride) {
         }, { onConflict: 'phone' });
         if (error) report.errors.push(`clients: ${error.message}`);
         else report.clients++;
+
+        await supabase.from('contacts').upsert({
+          id: c.id || `contact-${cleanPhone}`,
+          phone: cleanPhone,
+          name: c.name || 'Cliente WhatsApp',
+          status: c.status || 'active',
+          tags: c.tags || ['Cliente WhatsApp'],
+          metadata: c.custom_fields || c.metadata || {},
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'phone' }).catch(() => {});
       } catch (err) {
         report.errors.push(`clients: ${err.message}`);
       }

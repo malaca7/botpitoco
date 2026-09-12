@@ -33,7 +33,9 @@ import {
   syncFlowToSupabase,
   deleteFlowFromSupabase,
   syncFlowGraphToSupabase,
-  cleanButtonTitle
+  cleanButtonTitle,
+  resolveLinkedPhones,
+  syncContactToSupabase
 } from './flowRunner.mjs';
 import { processAdminBotMessage } from './botEngine.mjs';
 import { syncToSupabase } from './syncSupabase.mjs';
@@ -223,7 +225,27 @@ async function startWhatsApp() {
         if (remoteJid.includes('@g.us')) continue;
 
         const clientPhone = remoteJid.replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
-        const clientName = msg.pushName || 'Cliente Pitoco';
+        const dbCheck = loadDb();
+        const { primaryPhone, allPhones } = resolveLinkedPhones(clientPhone, dbCheck);
+
+        // Identificar se o cliente já tem um nome cadastrado pelo fluxo/CRM
+        let registeredName = null;
+        for (const p of allPhones) {
+          const contact = (typeof dbCheck.contacts === 'object' && !Array.isArray(dbCheck.contacts)) 
+            ? dbCheck.contacts[p] 
+            : (Array.isArray(dbCheck.contacts) ? dbCheck.contacts.find(c => String(c?.phone || '').replace(/\D/g, '') === p) : null);
+          if (contact?.name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(contact.name.trim())) {
+            registeredName = contact.name.trim();
+            break;
+          }
+          const convKey = `conv-${p}`;
+          if (dbCheck.conversations?.[convKey]?.contact_name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(dbCheck.conversations[convKey].contact_name.trim())) {
+            registeredName = dbCheck.conversations[convKey].contact_name.trim();
+            break;
+          }
+        }
+
+        const clientName = registeredName || msg.pushName || 'Cliente Pitoco';
         let text = msg.message.conversation || 
                    msg.message.extendedTextMessage?.text || 
                    msg.message.buttonsResponseMessage?.selectedButtonId ||
@@ -251,7 +273,6 @@ async function startWhatsApp() {
         const cleanInputLower = text.toLowerCase().trim();
         const isBotResetCmd = ['#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio', '/bot', '/sair', '/menu', 'reiniciar'].includes(cleanInputLower);
 
-        const dbCheck = loadDb();
         const convCheck = dbCheck.conversations?.[`conv-${clientPhone}`] || 
                           Object.values(dbCheck.conversations || {}).find(c => 
                             String(c?.phone || c?.contact_phone || '').replace(/\D/g, '') === clientPhone
@@ -286,7 +307,7 @@ async function startWhatsApp() {
         // Executar o fluxo publicado no Studio / Painel Admin
         try {
           console.log(`⚙️ [Flow Execution] Executando fluxo ativo no bot para ${clientPhone} (${clientName})...`);
-          const replies = await executePublishedFlow(remoteJid, text, clientName, clientPhone);
+          const replies = await executePublishedFlow(remoteJid, text, clientName, primaryPhone || clientPhone);
 
           if (Array.isArray(replies) && replies.length > 0) {
             for (let i = 0; i < replies.length; i++) {
@@ -476,12 +497,31 @@ async function recordMessageLocallyAndSupabase(phone, name, direction, content) 
     if (!db.conversations) db.conversations = {};
     if (!db.messages) db.messages = {};
 
+    const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
+    let registeredName = null;
+    for (const p of allPhones) {
+      const c = (typeof db.contacts === 'object' && !Array.isArray(db.contacts)) 
+        ? db.contacts[p] 
+        : (Array.isArray(db.contacts) ? db.contacts.find(x => String(x?.phone || '').replace(/\D/g, '') === p) : null);
+      if (c?.name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(c.name.trim())) {
+        registeredName = c.name.trim();
+        break;
+      }
+      const cKey = `conv-${p}`;
+      if (db.conversations?.[cKey]?.contact_name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(db.conversations[cKey].contact_name.trim())) {
+        registeredName = db.conversations[cKey].contact_name.trim();
+        break;
+      }
+    }
+
     const prevConv = db.conversations[convId] || {};
+    const effectiveName = registeredName || (name && !['Cliente', 'Cliente Pitoco'].includes(name) ? name : (prevConv.contact_name || 'Cliente WhatsApp'));
+
     db.conversations[convId] = {
       ...prevConv,
       id: convId,
-      contact_name: name || prevConv.contact_name || 'Cliente WhatsApp',
-      contact_phone: cleanPhone,
+      contact_name: effectiveName,
+      contact_phone: primaryPhone || cleanPhone,
       phone: cleanPhone,
       last_message: content,
       last_message_at: new Date().toISOString(),
@@ -502,17 +542,17 @@ async function recordMessageLocallyAndSupabase(phone, name, direction, content) 
       direction,
       content,
       sender: direction === 'inbound' ? 'user' : 'bot',
-      author_name: direction === 'inbound' ? (name || 'Cliente') : 'Pitoco Bot',
+      author_name: direction === 'inbound' ? effectiveName : 'Pitoco Bot',
       created_at: new Date().toISOString(),
     });
 
     saveDb(db);
+
+    // Gravar no Supabase preservando o nome registrado
+    recordMessageInSupabase(cleanPhone, effectiveName, direction, content);
   } catch (err) {
     console.warn('[Storage] Erro ao salvar mensagem no db local:', err.message);
   }
-
-  // Gravar no Supabase se configurado
-  recordMessageInSupabase(cleanPhone, name, direction, content);
 }
 
 async function recordMessageInSupabase(phone, name, direction, content) {
@@ -521,12 +561,16 @@ async function recordMessageInSupabase(phone, name, direction, content) {
     const cleanPhone = String(phone).replace(/\D/g, '');
     const convId = `conv-${cleanPhone}`;
 
-    await supabaseServer.from('clients').upsert({
+    const clientPayload = {
       id: `client-${cleanPhone}`,
-      name: name || 'Cliente WhatsApp',
       phone: cleanPhone,
       last_interaction: new Date().toISOString(),
-    }, { onConflict: 'phone' }).catch(() => {});
+    };
+    if (name && !['Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(name)) {
+      clientPayload.name = name;
+    }
+
+    await supabaseServer.from('clients').upsert(clientPayload, { onConflict: 'phone' }).catch(() => {});
 
     await supabaseServer.from('conversations').upsert({
       id: convId,
@@ -541,7 +585,7 @@ async function recordMessageInSupabase(phone, name, direction, content) {
       conversation_id: convId,
       direction,
       content,
-      author_name: direction === 'inbound' ? name : 'Pitoco Bot',
+      author_name: direction === 'inbound' ? (name || 'Cliente') : 'Pitoco Bot',
       created_at: new Date().toISOString(),
     }]).catch(() => {});
   } catch (e) {}
@@ -993,6 +1037,175 @@ app.delete('/api/stores/:id', (req, res) => {
     saveDb(db);
     console.log(`[Stores API] 🗑️ Loja removida: ${id}`);
     res.json({ success: true, message: `Loja ${id} removida` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==============================================================================
+// 2.5 CLIENTES / CONTATOS CRUD & SINCRONIZAÇÃO CRM
+// ==============================================================================
+app.get('/api/contacts', async (req, res) => {
+  try {
+    const db = loadDb();
+    let contactsList = [];
+    if (Array.isArray(db.contacts)) {
+      contactsList = [...db.contacts];
+    } else if (db.contacts && typeof db.contacts === 'object') {
+      contactsList = Object.values(db.contacts);
+    }
+
+    // Complementar com contatos das conversas caso não estejam no db.contacts
+    if (db.conversations) {
+      Object.values(db.conversations).forEach(conv => {
+        if (!conv) return;
+        const phone = String(conv.contact_phone || conv.phone || '').replace(/\D/g, '');
+        if (!phone) return;
+        const exists = contactsList.some(c => String(c.phone || '').replace(/\D/g, '') === phone);
+        if (!exists) {
+          contactsList.push({
+            id: conv.contact_id || `contact-${phone}`,
+            phone: phone,
+            name: conv.contact_name || 'Cliente WhatsApp',
+            status: 'active',
+            tags: ['Cliente WhatsApp'],
+            last_interaction: conv.last_message_at || new Date().toISOString(),
+            created_at: conv.created_at || new Date().toISOString(),
+            updated_at: conv.updated_at || new Date().toISOString(),
+          });
+        }
+      });
+    }
+
+    if (req.query.store_id) {
+      contactsList = contactsList.filter(c => !c.store_id || c.store_id === req.query.store_id);
+    }
+
+    // Ordenar por última interação decrescente
+    contactsList.sort((a, b) => new Date(b.last_interaction || b.updated_at || 0) - new Date(a.last_interaction || a.updated_at || 0));
+
+    res.json(contactsList);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/contacts', async (req, res) => {
+  try {
+    const db = loadDb();
+    const data = req.body || {};
+    const cleanPhone = String(data.phone || '').replace(/\D/g, '');
+    if (!cleanPhone) {
+      return res.status(400).json({ error: 'Telefone do contato é obrigatório' });
+    }
+
+    const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
+    const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
+
+    const newContact = {
+      id: data.id || `contact-${targetPhone}`,
+      name: data.name || 'Cliente WhatsApp',
+      phone: targetPhone,
+      email: data.email || null,
+      store_id: data.store_id || null,
+      store_name: data.store_name || null,
+      status: data.status || 'active',
+      is_registered: true,
+      tags: Array.isArray(data.tags) ? data.tags : ['Cliente WhatsApp'],
+      baby_name: data.baby_name || null,
+      due_date: data.due_date || null,
+      notes: data.notes || 'Atualizado via CRM / API',
+      custom_fields: data.custom_fields || {},
+      created_at: data.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      last_interaction: new Date().toISOString(),
+      ...data,
+    };
+
+    if (!db.contacts) db.contacts = {};
+    for (const p of allPhones) {
+      if (Array.isArray(db.contacts)) {
+        const idx = db.contacts.findIndex(c => String(c.phone || '').replace(/\D/g, '') === p);
+        if (idx >= 0) db.contacts[idx] = { ...db.contacts[idx], ...newContact, phone: p };
+        else db.contacts.push({ ...newContact, phone: p });
+      } else {
+        db.contacts[p] = { ...(db.contacts[p] || {}), ...newContact, phone: p };
+      }
+
+      if (db.conversations && db.conversations[`conv-${p}`]) {
+        db.conversations[`conv-${p}`].contact_name = newContact.name;
+        db.conversations[`conv-${p}`].updated_at = new Date().toISOString();
+      }
+
+      await syncContactToSupabase({ ...newContact, phone: p });
+    }
+
+    saveDb(db);
+    res.json({ success: true, contact: newContact });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/contacts/:id', async (req, res) => {
+  try {
+    const db = loadDb();
+    const id = req.params.id;
+    const data = req.body || {};
+    const cleanPhone = String(data.phone || id).replace(/\D/g, '');
+
+    const { allPhones } = resolveLinkedPhones(cleanPhone, db);
+    let updatedContact = null;
+
+    if (!db.contacts) db.contacts = {};
+    for (const p of allPhones) {
+      if (Array.isArray(db.contacts)) {
+        const idx = db.contacts.findIndex(c => c.id === id || String(c.phone || '').replace(/\D/g, '') === p);
+        if (idx >= 0) {
+          db.contacts[idx] = { ...db.contacts[idx], ...data, phone: p, updated_at: new Date().toISOString() };
+          updatedContact = db.contacts[idx];
+        }
+      } else if (db.contacts[p] || p === cleanPhone) {
+        db.contacts[p] = { ...(db.contacts[p] || {}), ...data, phone: p, updated_at: new Date().toISOString() };
+        updatedContact = db.contacts[p];
+      }
+
+      if (db.conversations && db.conversations[`conv-${p}`]) {
+        if (data.name) db.conversations[`conv-${p}`].contact_name = data.name;
+        db.conversations[`conv-${p}`].updated_at = new Date().toISOString();
+      }
+
+      if (updatedContact) {
+        await syncContactToSupabase(updatedContact);
+      }
+    }
+
+    saveDb(db);
+    res.json({ success: true, contact: updatedContact });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/contacts/:id', async (req, res) => {
+  try {
+    const db = loadDb();
+    const id = req.params.id;
+    const cleanPhone = id.replace(/\D/g, '');
+    if (Array.isArray(db.contacts)) {
+      db.contacts = db.contacts.filter(c => c.id !== id && String(c.phone || '').replace(/\D/g, '') !== cleanPhone);
+    } else if (db.contacts) {
+      delete db.contacts[id];
+      delete db.contacts[cleanPhone];
+    }
+    saveDb(db);
+
+    if (supabaseServer) {
+      await supabaseServer.from('clients').delete().eq('phone', cleanPhone).catch(() => {});
+      await supabaseServer.from('contacts').delete().eq('phone', cleanPhone).catch(() => {});
+    }
+
+    res.json({ success: true, message: `Contato ${id} removido` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -115,6 +115,28 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
     });
   }, []);
 
+  // Extrair dinamicamente variáveis criadas nos nós do fluxo (ex: perguntas, variáveis)
+  const dynamicFlowVars = React.useMemo(() => {
+    const list: { tag: string; label: string }[] = [];
+    (allNodes || []).forEach(n => {
+      const cfg = n.data?.config || {};
+      const nodeType = n.data?.nodeType || n.type;
+      if (nodeType === 'question' && cfg.variableName) {
+        const v = String(cfg.variableName).replace(/[{}]/g, '').trim();
+        if (v && !list.some(item => item.tag === `{{${v}}}`)) {
+          list.push({ tag: `{{${v}}}`, label: `Pergunta: ${v}` });
+        }
+      }
+      if (nodeType === 'variable' && (cfg.variableName || cfg.varName)) {
+        const v = String(cfg.variableName || cfg.varName).replace(/[{}]/g, '').trim();
+        if (v && !list.some(item => item.tag === `{{${v}}}`)) {
+          list.push({ tag: `{{${v}}}`, label: `Variável: ${v}` });
+        }
+      }
+    });
+    return list;
+  }, [allNodes]);
+
   const currentWidth = onWidthChange ? width : localWidth;
 
   const startResizing = (e: React.MouseEvent) => {
@@ -1715,12 +1737,13 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 </span>
                 <div className="flex flex-wrap gap-1">
                   {[
+                    ...dynamicFlowVars,
                     { tag: '{{resposta_usuario}}', label: 'Última Pergunta' },
                     { tag: '{{nome_cliente}}', label: 'Nome Completo' },
                     { tag: '{{primeiro_nome}}', label: '1º Nome' },
                     { tag: '{{nome}}', label: 'Nome' },
                     { tag: '{{cliente_nome}}', label: 'CRM Nome' },
-                  ].map((item) => {
+                  ].filter((item, idx, self) => idx === self.findIndex(t => t.tag === item.tag)).map((item) => {
                     const currentVal = config.contactName !== undefined ? config.contactName : (config.nameField !== undefined ? config.nameField : '{{nome_cliente}}');
                     const isActive = currentVal === item.tag;
                     return (

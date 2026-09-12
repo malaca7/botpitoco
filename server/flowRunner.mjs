@@ -44,12 +44,53 @@ export const supabaseClient = (createClient && SUPABASE_URL && SUPABASE_ANON_KEY
   : null;
 
 
+// Helper: Resolver correspondência bidirecional entre LID (WhatsApp Privacy ID) e Telefone Real (ex: 558196138924)
+export function resolveLinkedPhones(phone, db) {
+  const clean = String(phone || '').replace(/\D/g, '');
+  if (!clean) return { primaryPhone: '', allPhones: [] };
+
+  const phones = new Set([clean]);
+
+  if (db?.conversations) {
+    Object.values(db.conversations).forEach(conv => {
+      if (!conv) return;
+      const cPhone = String(conv.phone || '').replace(/\D/g, '');
+      const cContactPhone = String(conv.contact_phone || '').replace(/\D/g, '');
+      if (cPhone === clean && cContactPhone) phones.add(cContactPhone);
+      if (cContactPhone === clean && cPhone) phones.add(cPhone);
+    });
+  }
+
+  if (db?.contacts) {
+    const list = Array.isArray(db.contacts) ? db.contacts : Object.values(db.contacts);
+    list.forEach(c => {
+      if (!c) return;
+      const p = String(c.phone || '').replace(/\D/g, '');
+      const realP = String(c.real_phone || c.phone_number || c.metadata?.real_phone || '').replace(/\D/g, '');
+      if (p === clean && realP) phones.add(realP);
+      if (realP === clean && p) phones.add(p);
+    });
+  }
+
+  const allPhones = Array.from(phones);
+  // Priorizar telefone móvel padrão (10 a 13 dígitos) sobre o LID (15+ dígitos)
+  let primaryPhone = clean;
+  const standardPhone = allPhones.find(p => p.length >= 10 && p.length <= 13);
+  if (standardPhone) {
+    primaryPhone = standardPhone;
+  }
+
+  return { primaryPhone, allPhones };
+}
+
 // Async Supabase Sync Helpers
 export async function syncContactToSupabase(contact) {
   if (!supabaseClient || !contact) return;
   try {
     const cleanPhone = String(contact.phone || '').replace(/\D/g, '');
     if (!cleanPhone) return;
+
+    // 1. Tabela contacts
     const payload = {
       id: contact.id || `contact-${cleanPhone}`,
       name: contact.name || 'Cliente WhatsApp',
@@ -59,11 +100,28 @@ export async function syncContactToSupabase(contact) {
       is_registered: contact.is_registered !== false,
       profile_picture_url: contact.profile_picture_url || null,
       tags: contact.tags || ['Cliente'],
-      custom_fields: contact.custom_fields || contact.metadata || {},
+      metadata: contact.custom_fields || contact.metadata || {},
       last_interaction: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    await supabaseClient.from('contacts').upsert(payload, { onConflict: 'phone' });
+    await supabaseClient.from('contacts').upsert(payload, { onConflict: 'phone' }).catch(() => {});
+
+    // 2. Tabela clients (Tabela mestre utilizada pelo CRM e tela de Clientes)
+    const clientPayload = {
+      id: contact.id || `client-${cleanPhone}`,
+      name: contact.name || 'Cliente WhatsApp',
+      phone: cleanPhone,
+      email: contact.email || null,
+      store_id: contact.store_id || null,
+      store_name: contact.store_name || null,
+      notes: contact.notes || null,
+      baby_name: contact.baby_name || null,
+      due_date: contact.due_date || null,
+      tags: contact.tags || ['Cliente WhatsApp'],
+      last_interaction: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await supabaseClient.from('clients').upsert(clientPayload, { onConflict: 'phone' }).catch(() => {});
   } catch (err) {
     // Non-blocking
   }
@@ -677,7 +735,7 @@ export function replaceVars(text, vars = {}, botProfile = {}, customVariables = 
   });
 
   Object.keys(vars).forEach((key) => {
-    const cleanKey = key.replace(/^\{\+|\}+$/g, '').trim();
+    const cleanKey = key.replace(/^\{+|\}+$/g, '').trim();
     if (!cleanKey) return;
     const val = vars[key];
     const regex = new RegExp(`\\{\\{${cleanKey}\\}\\}`, 'gi');
@@ -1829,39 +1887,67 @@ function parseCustomDateString(input) {
       session.variables['resposta_usuario'] = finalVal;
       session.waitingForVar = null;
       if (isNameVar && extractedName) {
-        session.variables.nome_cliente = extractedName;
-        session.variables.cliente_nome = extractedName;
-        session.variables.nome = extractedName;
+        // Propagar em todas as variáveis de nomes possíveis para compatibilidade com qualquer nó
+        session.variables[varKey] = extractedName;
+        session.variables[`{{${varKey}}}`] = extractedName;
+        session.variables['nome_clientenovo'] = extractedName;
+        session.variables['{{nome_clientenovo}}'] = extractedName;
+        session.variables['nome_cliente'] = extractedName;
+        session.variables['{{nome_cliente}}'] = extractedName;
+        session.variables['cliente_nome'] = extractedName;
+        session.variables['{{cliente_nome}}'] = extractedName;
+        session.variables['nome'] = extractedName;
+        session.variables['{{nome}}'] = extractedName;
+        session.variables['primeiro_nome'] = extractedName.split(' ')[0] || extractedName;
+        session.variables['{{primeiro_nome}}'] = extractedName.split(' ')[0] || extractedName;
+        session.variables['resposta_usuario'] = extractedName;
+        session.variables['{{resposta_usuario}}'] = extractedName;
 
         if (!db.contacts) db.contacts = {};
-        if (!db.contacts[cleanPhone]) {
-          db.contacts[cleanPhone] = {
-            id: `contact-${cleanPhone}`,
-            phone: cleanPhone,
-            name: extractedName,
-            status: 'active',
-            tags: ['Cliente'],
-            is_registered: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-        } else {
-          db.contacts[cleanPhone].name = extractedName;
-          db.contacts[cleanPhone].status = 'active';
-          db.contacts[cleanPhone].is_registered = true;
-          if (!db.contacts[cleanPhone].tags) db.contacts[cleanPhone].tags = [];
-          if (!db.contacts[cleanPhone].tags.includes('Cliente')) {
-            db.contacts[cleanPhone].tags.push('Cliente');
+        const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
+
+        for (const phoneToSave of allPhones) {
+          if (!db.contacts[phoneToSave]) {
+            db.contacts[phoneToSave] = {
+              id: `contact-${phoneToSave}`,
+              phone: phoneToSave,
+              name: extractedName,
+              status: 'active',
+              tags: ['Lead', 'Cliente', 'Cliente WhatsApp', 'Bot'],
+              is_registered: true,
+              notes: 'Cadastrado e atualizado pelo fluxo do bot',
+              custom_fields: { nome_cliente: extractedName, [varKey]: extractedName },
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+          } else {
+            db.contacts[phoneToSave].name = extractedName;
+            db.contacts[phoneToSave].status = 'active';
+            db.contacts[phoneToSave].is_registered = true;
+            if (!db.contacts[phoneToSave].tags) db.contacts[phoneToSave].tags = [];
+            ['Lead', 'Cliente', 'Cliente WhatsApp', 'Bot'].forEach(t => {
+              if (!db.contacts[phoneToSave].tags.includes(t)) db.contacts[phoneToSave].tags.push(t);
+            });
+            if (!db.contacts[phoneToSave].custom_fields) db.contacts[phoneToSave].custom_fields = {};
+            db.contacts[phoneToSave].custom_fields.nome_cliente = extractedName;
+            db.contacts[phoneToSave].custom_fields[varKey] = extractedName;
+            db.contacts[phoneToSave].updated_at = new Date().toISOString();
           }
-          db.contacts[cleanPhone].updated_at = new Date().toISOString();
+
+          if (db.conversations && db.conversations[`conv-${phoneToSave}`]) {
+            db.conversations[`conv-${phoneToSave}`].contact_name = extractedName;
+            db.conversations[`conv-${phoneToSave}`].updated_at = new Date().toISOString();
+            syncConversationToSupabase(db.conversations[`conv-${phoneToSave}`]);
+          }
+
+          syncContactToSupabase(db.contacts[phoneToSave]);
         }
 
-        if (db.conversations && db.conversations[`conv-${cleanPhone}`]) {
-          db.conversations[`conv-${cleanPhone}`].contact_name = extractedName;
-        }
+        try {
+          fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf-8');
+        } catch (err) {}
 
-        syncContactToSupabase(db.contacts[cleanPhone]);
-        console.log(`[FlowRunner] 👤 Nome do cliente gravado da resposta da pergunta: "${extractedName}" para ${cleanPhone}`);
+        console.log(`[FlowRunner] 👤 Nome do cliente gravado e vinculado para ${allPhones.join(', ')}: "${extractedName}"`);
       }
 
       if (varKey.toLowerCase().includes('email')) {
@@ -2312,15 +2398,37 @@ function parseCustomDateString(input) {
       let resolvedName = '';
       const rawNameConfig = config.contactName || config.nameField;
       if (rawNameConfig) {
-        resolvedName = replaceVars(rawNameConfig, session.variables, botProfile);
+        // Limpar possíveis caracteres anexados como typos: '{{nome_cliente}}n' -> '{{nome_cliente}}'
+        let cleanRaw = String(rawNameConfig).trim();
+        const bracketMatch = cleanRaw.match(/\{\{([^}]+)\}\}/);
+        if (bracketMatch) {
+          const varInside = bracketMatch[1].trim();
+          resolvedName = session.variables[varInside] || session.variables[`{{${varInside}}}`] || '';
+        }
+        if (!resolvedName) {
+          resolvedName = replaceVars(cleanRaw, session.variables, botProfile);
+        }
         if (resolvedName === rawNameConfig && !rawNameConfig.includes('{{')) {
           resolvedName = session.variables[rawNameConfig] || rawNameConfig;
         }
       }
-      if (!resolvedName || resolvedName === 'nome_cliente' || resolvedName === 'cliente_nome' || resolvedName === 'undefined' || resolvedName === 'null') {
-        resolvedName = session.variables['nome_cliente'] || session.variables['cliente_nome'] || session.variables['nome'] || session.variables['resposta_usuario'] || senderName || 'Cliente WhatsApp';
+
+      // Fallback robusto se a variável não foi substituída ou contiver valores genéricos
+      const isUnresolved = !resolvedName || 
+                           resolvedName.startsWith('{{') || 
+                           resolvedName.endsWith('}}') || 
+                           ['nome_cliente', 'cliente_nome', 'nome', 'resposta_usuario', 'nome_clientenovo', 'undefined', 'null', 'Cliente WhatsApp', 'Cliente', 'Cliente Pitoco'].includes(resolvedName.trim());
+
+      if (isUnresolved) {
+        resolvedName = session.variables['nome_clientenovo'] || 
+                       session.variables['nome_cliente'] || 
+                       session.variables['cliente_nome'] || 
+                       session.variables['nome'] || 
+                       session.variables['resposta_usuario'] || 
+                       (senderName && senderName !== 'Cliente' && senderName !== 'Cliente Pitoco' ? senderName : '') || 
+                       'Cliente WhatsApp';
       }
-      resolvedName = String(resolvedName).trim();
+      resolvedName = String(resolvedName).replace(/[{}]/g, '').trim();
 
       // 2. Resolver Telefone do Cliente (Interagindo, Variável ou Fixo)
       let targetPhone = cleanPhone;
@@ -2337,6 +2445,11 @@ function parseCustomDateString(input) {
         if (cleanExt.length >= 8) targetPhone = cleanExt;
       }
       if (!targetPhone) targetPhone = cleanPhone;
+
+      const { primaryPhone, allPhones } = resolveLinkedPhones(targetPhone, db);
+      if (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) {
+        targetPhone = primaryPhone;
+      }
 
       // Gravar na variável de saída do telefone
       const phoneVarKey = (config.phoneVarName || 'telefone_whatsapp').replace(/[{}]/g, '').trim();
@@ -2375,61 +2488,16 @@ function parseCustomDateString(input) {
         session.variables[fKey] = fVal;
       }
 
-      // 5. Atualizar no Banco de Dados (Suporte híbrido a Array e Map)
-      if (!db.contacts) db.contacts = [];
+      // 5. Atualizar no Banco de Dados em todos os telefones vinculados (Telefone Real + LID)
+      if (!db.contacts) db.contacts = {};
       let savedContact = null;
 
-      if (Array.isArray(db.contacts)) {
-        let existingIndex = db.contacts.findIndex((c) => {
-          const p = String(c.phone || '').replace(/\D/g, '');
-          return p === targetPhone || p.endsWith(targetPhone) || targetPhone.endsWith(p);
-        });
-
-        if (existingIndex >= 0) {
-          db.contacts[existingIndex] = {
-            ...db.contacts[existingIndex],
-            name: resolvedName || db.contacts[existingIndex].name,
-            phone: targetPhone,
-            profile_picture_url: resolvedPhoto || db.contacts[existingIndex].profile_picture_url,
-            baby_name: babyName || db.contacts[existingIndex].baby_name,
-            due_date: dueDate || db.contacts[existingIndex].due_date,
-            email: email || db.contacts[existingIndex].email,
-            tags: Array.from(new Set([...(db.contacts[existingIndex].tags || []), ...tagsList])),
-            notes: notes || db.contacts[existingIndex].notes,
-            custom_fields: { ...(db.contacts[existingIndex].custom_fields || {}), ...customFields },
-            is_registered: true,
-            status: 'active',
-            last_interaction: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          savedContact = db.contacts[existingIndex];
-        } else {
-          savedContact = {
-            id: `contact-${targetPhone || Date.now()}`,
-            name: resolvedName || 'Cliente WhatsApp',
-            phone: targetPhone,
-            profile_picture_url: resolvedPhoto || undefined,
-            baby_name: babyName || undefined,
-            due_date: dueDate || undefined,
-            email: email || undefined,
-            tags: tagsList,
-            status: 'active',
-            is_registered: true,
-            notes: notes,
-            custom_fields: customFields,
-            total_orders: 0,
-            created_at: new Date().toISOString(),
-            last_interaction: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          db.contacts.push(savedContact);
-        }
-      } else if (typeof db.contacts === 'object') {
-        const existing = db.contacts[targetPhone] || db.contacts[cleanPhone] || {};
-        savedContact = {
-          id: existing.id || `contact-${targetPhone || Date.now()}`,
+      for (const phoneKey of allPhones) {
+        const existing = (typeof db.contacts === 'object' && !Array.isArray(db.contacts)) ? (db.contacts[phoneKey] || {}) : {};
+        const contactObj = {
+          id: existing.id || `contact-${phoneKey}`,
           name: resolvedName || existing.name || 'Cliente WhatsApp',
-          phone: targetPhone,
+          phone: phoneKey,
           profile_picture_url: resolvedPhoto || existing.profile_picture_url,
           baby_name: babyName || existing.baby_name,
           due_date: dueDate || existing.due_date,
@@ -2437,41 +2505,59 @@ function parseCustomDateString(input) {
           tags: Array.from(new Set([...(existing.tags || []), ...tagsList])),
           status: 'active',
           is_registered: true,
-          notes: notes || existing.notes,
-          custom_fields: { ...(existing.custom_fields || {}), ...customFields },
+          notes: notes || existing.notes || 'Cadastrado e atualizado pelo fluxo do bot',
+          custom_fields: { ...(existing.custom_fields || {}), ...customFields, nome_cliente: resolvedName },
           created_at: existing.created_at || new Date().toISOString(),
           last_interaction: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
-        db.contacts[targetPhone] = savedContact;
-      }
 
-      // 6. Atualizar Conversa Ativa na Central de Atendimento
-      if (config.updateActiveConversation !== false && db.conversations) {
-        const convKey = db.conversations[`conv-${targetPhone}`] ? `conv-${targetPhone}` : `conv-${cleanPhone}`;
-        if (db.conversations[convKey]) {
-          db.conversations[convKey].contact_name = resolvedName;
-          if (resolvedPhoto) db.conversations[convKey].profile_pic = resolvedPhoto;
-          db.conversations[convKey].updated_at = new Date().toISOString();
-          syncConversationToSupabase(db.conversations[convKey]);
+        if (Array.isArray(db.contacts)) {
+          const idx = db.contacts.findIndex(c => String(c.phone || '').replace(/\D/g, '') === phoneKey);
+          if (idx >= 0) db.contacts[idx] = contactObj;
+          else db.contacts.push(contactObj);
+        } else {
+          db.contacts[phoneKey] = contactObj;
         }
+
+        if (phoneKey === targetPhone || !savedContact) {
+          savedContact = contactObj;
+        }
+
+        // 6. Atualizar Conversa Ativa na Central de Atendimento
+        if (config.updateActiveConversation !== false && db.conversations) {
+          const convKey = `conv-${phoneKey}`;
+          if (db.conversations[convKey]) {
+            db.conversations[convKey].contact_name = resolvedName;
+            if (resolvedPhoto) db.conversations[convKey].profile_pic = resolvedPhoto;
+            db.conversations[convKey].updated_at = new Date().toISOString();
+            syncConversationToSupabase(db.conversations[convKey]);
+          }
+        }
+
+        // 7. Persistência em Nuvem (Supabase contacts + clients)
+        await syncContactToSupabase(contactObj);
       }
 
-      // 7. Persistência em Nuvem (Supabase) e Arquivo Local
-      if (savedContact) {
-        await syncContactToSupabase(savedContact);
-      }
       try {
         fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf-8');
       } catch (err) {}
 
-      // 8. Variáveis no Contexto da Conversa
+      // 8. Variáveis no Contexto da Conversa com todos os aliases
       session.variables['cliente_salvo'] = true;
       session.variables['cliente_id'] = savedContact?.id;
       session.variables['cliente_nome'] = resolvedName;
       session.variables['nome_cliente'] = resolvedName;
       session.variables['primeiro_nome'] = resolvedName.split(' ')[0] || resolvedName;
       session.variables['nome'] = resolvedName;
+      session.variables['nome_clientenovo'] = resolvedName;
+      session.variables['resposta_usuario'] = resolvedName;
+      session.variables['{{cliente_nome}}'] = resolvedName;
+      session.variables['{{nome_cliente}}'] = resolvedName;
+      session.variables['{{primeiro_nome}}'] = resolvedName.split(' ')[0] || resolvedName;
+      session.variables['{{nome}}'] = resolvedName;
+      session.variables['{{nome_clientenovo}}'] = resolvedName;
+      session.variables['{{resposta_usuario}}'] = resolvedName;
       session.variables['is_primeiro_contato'] = false;
       session.variables['is_novo_contato'] = false;
       session.variables['is_existing_contact'] = true;
