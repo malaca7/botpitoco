@@ -10,7 +10,6 @@ dist
 *.zip
 .gh-pages-temp
 docs
-assets
 discloud/dist
 discloud/server
 *.log

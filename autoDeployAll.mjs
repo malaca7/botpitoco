@@ -158,7 +158,7 @@ async function main() {
         execSync('git checkout -b gh-pages', { cwd: tempDeployDir, stdio: 'pipe' });
         execSync('git config user.email "bot@pitoco.malaca.com.br"', { cwd: tempDeployDir, stdio: 'pipe' });
         execSync('git config user.name "Pitoco Bot"', { cwd: tempDeployDir, stdio: 'pipe' });
-        execSync('git add -A', { cwd: tempDeployDir, stdio: 'pipe' });
+        execSync('git add -f -A', { cwd: tempDeployDir, stdio: 'pipe' });
         execSync('git commit -m "deploy(pages): producao estatica otimizada pitoco.malaca.com.br"', { cwd: tempDeployDir, stdio: 'pipe' });
 
         // Adicionar remotes no repo temporário
