@@ -677,8 +677,10 @@ export function replaceVars(text, vars = {}, botProfile = {}, customVariables = 
   });
 
   Object.keys(vars).forEach((key) => {
+    const cleanKey = key.replace(/^\{\+|\}+$/g, '').trim();
+    if (!cleanKey) return;
     const val = vars[key];
-    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
+    const regex = new RegExp(`\\{\\{${cleanKey}\\}\\}`, 'gi');
     res = res.replace(regex, String(val ?? ''));
   });
 
@@ -1103,7 +1105,7 @@ export function getLiveContacts() {
 }
 
 // Function to find if a contact is already registered (in Supabase or Local DB)
-export async function findRegisteredContact(cleanPhone, senderName, db) {
+export async function findRegisteredContact(cleanPhone, senderName, db, checkCriteria = 'crm_or_name') {
   const digitsOnly = (cleanPhone || '').replace(/\D/g, '');
   if (!digitsOnly) return { isRegistered: false, contact: null };
 
@@ -1137,19 +1139,56 @@ export async function findRegisteredContact(cleanPhone, senderName, db) {
     if (c.status === 'lead' || c.is_registered === false) return false;
     if (c.is_registered === true || c.is_verified === true) return true;
     
-    // Check tags: must have an explicit client tag
-    const tagList = (c.tags || []).map((t) => String(t).toLowerCase().trim());
-    if (tagList.includes('cliente') || tagList.includes('vip') || tagList.includes('recorrente') || tagList.includes('mensalista')) {
+    // Check tags: safely parse tags if string or array
+    const rawTags = c.tags;
+    const tagList = Array.isArray(rawTags)
+      ? rawTags.map((t) => String(t).toLowerCase().trim())
+      : typeof rawTags === 'string'
+      ? rawTags.split(',').map((t) => t.toLowerCase().trim())
+      : [];
+
+    const hasClientTag = tagList.some((t) => 
+      t.includes('cliente') || t.includes('vip') || t.includes('recorrente') || t.includes('mensalista') || t.includes('salvo') || t.includes('cadastrado')
+    );
+
+    if (checkCriteria === 'tag') {
+      return hasClientTag;
+    }
+
+    if (hasClientTag) {
       return true;
     }
-    
-    // Status active with custom_fields can only qualify if NOT a lead and NOT unnamed
-    const cleanName = String(c.name || '').trim();
-    if (c.status === 'active' && cleanName && cleanName !== 'Cliente' && cleanName !== 'Cliente WhatsApp' && cleanName !== 'nome_cliente' && cleanName !== 'undefined') {
-      if (c.custom_fields && Object.keys(c.custom_fields).length > 0) {
-        return true;
-      }
+
+    // Check orders / purchases / appointments
+    if ((Number(c.total_orders) || 0) > 0 || (Number(c.total_spent) || 0) > 0 || (Number(c.orders_count) || 0) > 0) {
+      return true;
     }
+
+    if (checkCriteria === 'appointment_or_order') {
+      return false;
+    }
+
+    // Clean Real Name check:
+    const cleanName = String(c.name || '').trim();
+    const isRealName = Boolean(
+      cleanName && 
+      cleanName.toLowerCase() !== 'cliente' && 
+      cleanName.toLowerCase() !== 'cliente whatsapp' && 
+      cleanName.toLowerCase() !== 'nome_cliente' && 
+      cleanName.toLowerCase() !== 'undefined' && 
+      cleanName.toLowerCase() !== 'null' && 
+      !cleanName.includes('{{')
+    );
+
+    // If contact has a real name in CRM/Database and status is active (or undefined/not lead), they are a saved contact!
+    if (isRealName && (c.status === 'active' || !c.status)) {
+      return true;
+    }
+
+    if (c.custom_fields && Object.keys(c.custom_fields).length > 0) {
+      return true;
+    }
+
     return false;
   };
 
@@ -1696,9 +1735,27 @@ function parseCustomDateString(input) {
   const prevType = prevNode?.data?.nodeType || prevNode?.type;
   const hasOutgoingEdges = prevNode ? edges.some((e) => e.source === prevNode.id) : false;
 
+  const interactiveTypes = [
+    'question',
+    'buttons',
+    'store_selector',
+    'select_service',
+    'services_catalog',
+    'select_date',
+    'ask_date',
+    'select_time_slot',
+    'schedule_contact',
+    'select_product',
+    'shipping_calculator',
+    'pix_payment',
+    'vip_consultation',
+    'promotional_coupon',
+  ];
+
   const isWaitingForInput = Boolean(
     session.waitingForVar ||
-    (prevNode && (prevType === 'question' || prevType === 'buttons' || prevType === 'ask_date' || prevType === 'select_date'))
+    (session.activeButtons && session.activeButtons.length > 0) ||
+    (prevNode && interactiveTypes.includes(prevType))
   );
 
   // -------------------------------------------------------------
@@ -1855,16 +1912,22 @@ function parseCustomDateString(input) {
       }
     }
 
-    // 2. Buttons / Available slots / Services Catalog / Date selection
+    // 2. Buttons / Available slots / Services Catalog / Date selection / Store Selection
     else if (
       prevNode &&
       (prevType === 'buttons' ||
+        prevType === 'store_selector' ||
         prevType === 'select_service' ||
         prevType === 'services_catalog' ||
         prevType === 'select_date' ||
         prevType === 'ask_date' ||
         prevType === 'select_time_slot' ||
-        prevType === 'schedule_contact')
+        prevType === 'schedule_contact' ||
+        prevType === 'select_product' ||
+        prevType === 'shipping_calculator' ||
+        prevType === 'pix_payment' ||
+        prevType === 'vip_consultation' ||
+        prevType === 'promotional_coupon')
     ) {
       const btnConfig = prevNode.data?.config || {};
       const buttons = session.activeButtons || btnConfig.buttons || [];
@@ -1994,22 +2057,28 @@ function parseCustomDateString(input) {
         // If from store_selector
         if (prevType === 'store_selector') {
           const storeFromDb = (db.stores || []).find(
-            (s) => s.id === matchedBtn.id || s.slug === matchedBtn.id || s.name === matchedBtn.title || matchedBtn.id.includes(s.id)
+            (s) => s.id === matchedBtn.id || s.slug === matchedBtn.id || s.name === matchedBtn.title || matchedBtn.id.includes(s.id) || (s.id && matchedBtn.storeId === s.id)
           );
           const storeMap = {
-            store_matriz: 'Matriz Centro (Recife)',
+            store_matriz: 'Loja Matriz — Centro',
             store_ipojuca: 'Loja Ipojuca - Filial',
             store_boulevard: 'Loja Ipojuca - Filial',
             store_ecommerce: 'Loja Virtual & E-commerce',
-            'store-001': 'Matriz Centro (Recife)',
+            'store-001': 'Loja Matriz — Centro',
             'store-002': 'Loja Ipojuca - Filial',
             'store-003': 'Loja Virtual & E-commerce',
           };
-          const storeName = storeFromDb?.name || storeMap[matchedBtn.id] || matchedBtn.title;
+          const storeName = storeFromDb?.name || storeMap[matchedBtn.id] || matchedBtn.storeName || matchedBtn.title || 'Loja Matriz — Centro';
+          const storeId = storeFromDb?.id || matchedBtn.storeId || matchedBtn.id || 'store-001';
+          const storeWhatsApp = storeFromDb?.whatsapp_number || storeFromDb?.phone || '';
+
           session.variables['loja_escolhida'] = storeName;
-          session.variables['loja_id'] = storeFromDb?.id || matchedBtn.id;
+          session.variables['loja_id'] = storeId;
+          session.variables['loja_nome'] = storeName;
+          session.variables['loja_whatsapp'] = storeWhatsApp;
           session.variables['opcao_selecionada'] = storeName;
-          console.log(`[FlowRunner] 🏬 Loja selecionada pelo cliente: "${storeName}" (${matchedBtn.id})`);
+          session.variables['resposta_usuario'] = storeName;
+          console.log(`[FlowRunner] 🏬 Loja selecionada pelo cliente: "${storeName}" (ID: ${storeId})`);
         }
 
         // If from shipping_calculator
@@ -2070,13 +2139,17 @@ function parseCustomDateString(input) {
                 (matchedBtn.storeId && e.sourceHandle === matchedBtn.storeId) ||
                 (matchedBtn.slug && e.sourceHandle === matchedBtn.slug) ||
                 (matchedBtn.slug && e.sourceHandle === `store_${matchedBtn.slug}`) ||
-                (matchedBtn.id === 'store-001' && (e.sourceHandle === 'store_matriz' || e.sourceHandle === 'matriz')) ||
+                (matchedBtn.id === 'store-001' && (e.sourceHandle === 'store_matriz' || e.sourceHandle === 'matriz' || e.sourceHandle === 'store-001')) ||
                 (matchedBtn.id === 'store_matriz' && (e.sourceHandle === 'store-001' || e.sourceHandle === 'matriz')) ||
-                (matchedBtn.id === 'store-002' && (e.sourceHandle === 'store_ipojuca' || e.sourceHandle === 'store_boulevard' || e.sourceHandle === 'ipojuca')) ||
+                (matchedBtn.id === 'store-002' && (e.sourceHandle === 'store_ipojuca' || e.sourceHandle === 'store_boulevard' || e.sourceHandle === 'ipojuca' || e.sourceHandle === 'store-002')) ||
                 (matchedBtn.id === 'store_ipojuca' && (e.sourceHandle === 'store-002' || e.sourceHandle === 'store_boulevard' || e.sourceHandle === 'ipojuca')) ||
-                (matchedBtn.id === 'store-003' && (e.sourceHandle === 'store_ecommerce' || e.sourceHandle === 'ecommerce')) ||
-                (matchedBtn.id === 'store_ecommerce' && (e.sourceHandle === 'store-003' || e.sourceHandle === 'ecommerce')))
-          ) || edges.find((e) => e.source === prevNode.id);
+                (matchedBtn.id === 'store-003' && (e.sourceHandle === 'store_ecommerce' || e.sourceHandle === 'ecommerce' || e.sourceHandle === 'store-003')) ||
+                (matchedBtn.id === 'store_ecommerce' && (e.sourceHandle === 'store-003' || e.sourceHandle === 'ecommerce')) ||
+                (e.sourceHandle === `store-${String(matchedBtnIndex + 1).padStart(3, '0')}`) ||
+                (e.sourceHandle === `store_${matchedBtnIndex + 1}`))
+          ) ||
+          (matchedBtnIndex >= 0 ? edges.filter((e) => e.source === prevNode.id)[matchedBtnIndex] : null) ||
+          edges.find((e) => e.source === prevNode.id);
 
         if (targetEdge) {
           currentNode = nodes.find((n) => n.id === targetEdge.target);
@@ -2324,6 +2397,8 @@ function parseCustomDateString(input) {
             tags: Array.from(new Set([...(db.contacts[existingIndex].tags || []), ...tagsList])),
             notes: notes || db.contacts[existingIndex].notes,
             custom_fields: { ...(db.contacts[existingIndex].custom_fields || {}), ...customFields },
+            is_registered: true,
+            status: 'active',
             last_interaction: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };
@@ -2339,6 +2414,7 @@ function parseCustomDateString(input) {
             email: email || undefined,
             tags: tagsList,
             status: 'active',
+            is_registered: true,
             notes: notes,
             custom_fields: customFields,
             total_orders: 0,
@@ -2360,9 +2436,9 @@ function parseCustomDateString(input) {
           email: email || existing.email,
           tags: Array.from(new Set([...(existing.tags || []), ...tagsList])),
           status: 'active',
+          is_registered: true,
           notes: notes || existing.notes,
           custom_fields: { ...(existing.custom_fields || {}), ...customFields },
-          is_registered: true,
           created_at: existing.created_at || new Date().toISOString(),
           last_interaction: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -2394,9 +2470,13 @@ function parseCustomDateString(input) {
       session.variables['cliente_id'] = savedContact?.id;
       session.variables['cliente_nome'] = resolvedName;
       session.variables['nome_cliente'] = resolvedName;
-      session.variables['primeiro_nome'] = resolvedName.split(' ')[0];
+      session.variables['primeiro_nome'] = resolvedName.split(' ')[0] || resolvedName;
       session.variables['nome'] = resolvedName;
+      session.variables['is_primeiro_contato'] = false;
+      session.variables['is_novo_contato'] = false;
+      session.variables['is_existing_contact'] = true;
       session.variables['cliente_telefone'] = targetPhone;
+      session.variables['telefone_whatsapp'] = targetPhone;
       session.variables['cliente_foto'] = resolvedPhoto;
       session.variables['foto_cliente'] = resolvedPhoto;
       if (babyName) session.variables['cliente_bebe'] = babyName;
@@ -2417,15 +2497,24 @@ function parseCustomDateString(input) {
 
     // 4. Check Contact Node (Primeiro Contato vs Contato Salvo / Recorrente)
     else if (nodeType === 'check_contact') {
-      const contactInfo = await findRegisteredContact(cleanPhone, senderName, db);
+      let checkPhone = cleanPhone;
+      if (config.phoneMode === 'variable' && config.phoneVariable) {
+        const varKey = config.phoneVariable.replace(/[{}]/g, '').trim();
+        const extracted = session.variables[varKey] || session.variables[config.phoneVariable] || replaceVars(config.phoneVariable, session.variables, botProfile);
+        const cleanExt = String(extracted || '').replace(/\D/g, '');
+        if (cleanExt.length >= 8) checkPhone = cleanExt;
+      }
+
+      const contactInfo = await findRegisteredContact(checkPhone, senderName, db, config.checkCriteria || 'crm_or_name');
       const isNew = !contactInfo.isRegistered;
       const contact = contactInfo.contact;
 
       // Populate rich context variables
       session.variables['is_primeiro_contato'] = isNew;
       session.variables['is_novo_contato'] = isNew;
+      session.variables['is_existing_contact'] = !isNew;
       session.variables['tipo_cliente'] = isNew ? 'novo' : 'recorrente';
-      session.variables['telefone_whatsapp'] = cleanPhone;
+      session.variables['telefone_whatsapp'] = checkPhone;
 
       if (contact?.custom_fields) {
         Object.assign(session.variables, contact.custom_fields);
@@ -2434,12 +2523,16 @@ function parseCustomDateString(input) {
         session.variables['nome_cliente'] = contact.name;
         session.variables['cliente_nome'] = contact.name;
         session.variables['nome'] = contact.name;
+        const firstName = String(contact.name).trim().split(' ')[0] || contact.name;
+        session.variables['primeiro_nome'] = firstName;
       }
       if (contact?.tags) {
-        session.variables['tags_contato'] = (contact.tags || []).join(', ');
+        const rawTags = contact.tags;
+        const tagsStr = Array.isArray(rawTags) ? rawTags.join(', ') : String(rawTags || '');
+        session.variables['tags_contato'] = tagsStr;
       }
 
-      console.log(`[FlowRunner] 👥 [Check Contact] Verificação para ${cleanPhone}: ${isNew ? '🆕 NOVO CONTATO (1ª Vez)' : `✅ CONTATO JÁ CADASTRADO ("${contact?.name || 'Cliente'}")`}`);
+      console.log(`[FlowRunner] 👥 [Check Contact] Verificação para ${checkPhone}: ${isNew ? '🆕 NOVO CONTATO (1ª Vez)' : `✅ CONTATO JÁ CADASTRADO ("${contact?.name || 'Cliente'}")`}`);
 
       // Follow edge from 'is_new' or 'is_existing' handle
       const targetHandle = isNew ? 'is_new' : 'is_existing';

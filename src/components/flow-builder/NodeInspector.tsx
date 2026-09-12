@@ -40,7 +40,8 @@ import {
   User,
   Phone,
   MessageSquare,
-  Send
+  Send,
+  GitBranch
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { VariableBadge } from './ui/VariableBadge';
@@ -73,9 +74,12 @@ export interface NodeInspectorProps {
   onDeleteNode: (nodeId: string) => void;
   onDuplicateNode: (nodeId: string) => void;
   onClose: () => void;
-  onStartConnecting?: (node: FlowNode) => void;
+  onStartConnecting?: (node: FlowNode, handleId?: string | null, handleLabel?: string) => void;
   width?: number;
   onWidthChange?: (newWidth: number) => void;
+  allNodes?: FlowNode[];
+  edges?: any[];
+  onSetTargetNode?: (sourceId: string, targetId: string, handleId?: string | null) => void;
 }
 
 export const NodeInspector: React.FC<NodeInspectorProps> = ({
@@ -87,6 +91,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   onStartConnecting,
   width = 360,
   onWidthChange,
+  allNodes = [],
+  edges = [],
+  onSetTargetNode,
 }) => {
   const [localWidth, setLocalWidth] = useState(width);
   const [isResizing, setIsResizing] = useState(false);
@@ -178,8 +185,16 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
     onUpdateConfig(node.id, newLabel, config);
   };
 
-  const handleConfigChange = (key: string, value: any) => {
-    onUpdateConfig(node.id, data.label, { ...config, [key]: value });
+  const handleConfigChange = (keyOrObj: string | Record<string, any>, value?: any) => {
+    if (typeof keyOrObj === 'string') {
+      onUpdateConfig(node.id, data.label, { ...config, [keyOrObj]: value });
+    } else {
+      onUpdateConfig(node.id, data.label, { ...config, ...keyOrObj });
+    }
+  };
+
+  const updateConfigKey = (key: string, value: any) => {
+    handleConfigChange(key, value);
   };
 
   return (
@@ -442,11 +457,38 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               rows={3}
             />
 
+            {/* Atalhos Rápidos de Variáveis para o Corpo */}
+            <div className="p-2.5 rounded-xl bg-dark-950/80 border border-brand-500/20 text-[11px] text-slate-300 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-brand-300 text-[10px] uppercase tracking-wider">Variáveis Dinâmicas:</span>
+                <span className="text-[9.5px] text-slate-400">Toque para inserir</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { tag: '{{loja_escolhida}}', label: 'Loja Escolhida' },
+                  { tag: '{{nome_cliente}}', label: 'Nome Cliente' },
+                  { tag: '{{primeiro_nome}}', label: '1º Nome' },
+                  { tag: '{{empresa}}', label: 'Empresa' },
+                  { tag: '{{bot_nome}}', label: 'Nome do Bot' },
+                ].map((v) => (
+                  <button
+                    key={v.tag}
+                    type="button"
+                    onClick={() => handleConfigChange('bodyText', `${config.bodyText || ''} ${v.tag}`)}
+                    className="px-2 py-0.5 rounded-md bg-dark-900 border border-brand-500/30 text-brand-300 hover:bg-brand-500/20 text-[10px] font-mono transition-all"
+                    title={`Inserir ${v.label}`}
+                  >
+                    + {v.tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <Input
               label="Texto de Rodapé (Footer - Opcional)"
               value={config.footerText || ''}
               onChange={(e) => handleConfigChange('footerText', e.target.value)}
-              placeholder="Ex: 7 Assistente • Atendimento 24h"
+              placeholder="Ex: Pitoco de Gente • Atendimento Oficial"
             />
 
             <div className="space-y-2.5">
@@ -454,38 +496,89 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 <label className="block text-xs font-semibold text-slate-200">
                   Botões Interativos ({ (config.buttons || []).length }/3)
                 </label>
-                <span className="text-[10px] text-brand-400">Cada botão cria 1 saída no nó</span>
+                <span className="text-[10px] text-brand-400">Cada botão cria 1 saída dedicada</span>
               </div>
 
-              {(config.buttons || []).map((btn: any, index: number) => (
-                <div key={index} className="flex items-center gap-2 p-2 rounded-xl bg-dark-950/70 border border-white/5">
-                  <div className="w-5 h-5 rounded-md bg-brand-500/20 text-brand-400 font-mono text-[10px] flex items-center justify-center font-bold flex-shrink-0">
-                    {index + 1}
+              {(config.buttons || []).map((btn: any, index: number) => {
+                const handleId = btn.id || `btn_${index + 1}`;
+                const connectedEdge = edges?.find((e: any) => e.source === node.id && (
+                  e.sourceHandle === handleId || 
+                  e.sourceHandle === btn.id || 
+                  e.sourceHandle === `btn_${index + 1}` || 
+                  e.sourceHandle === `btn_${index}`
+                ));
+                const targetNode = allNodes?.find((n: FlowNode) => n.id === connectedEdge?.target);
+
+                return (
+                  <div key={index} className="p-2.5 rounded-xl bg-dark-950/80 border border-brand-500/20 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-md bg-brand-500/20 text-brand-400 font-mono text-[10px] flex items-center justify-center font-bold flex-shrink-0">
+                        {index + 1}
+                      </div>
+                      <Input
+                        value={btn.title || ''}
+                        onChange={(e) => {
+                          const updated = [...(config.buttons || [])];
+                          updated[index] = { ...btn, title: e.target.value };
+                          handleConfigChange('buttons', updated);
+                        }}
+                        placeholder={`Texto do Botão ${index + 1}`}
+                      />
+                      {onStartConnecting && (
+                        <button
+                          type="button"
+                          onClick={() => onStartConnecting(node, handleId, btn.title || `Botão ${index + 1}`)}
+                          className="px-2 py-1.5 rounded-lg text-emerald-400 hover:bg-emerald-950/40 border border-emerald-500/30 text-[10px] font-bold shrink-0 transition-all"
+                          title="Ligar saída deste botão no canvas"
+                        >
+                          ⚡ Ligar
+                        </button>
+                      )}
+                      {(config.buttons || []).length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = (config.buttons || []).filter((_: any, i: number) => i !== index);
+                            handleConfigChange('buttons', updated);
+                          }}
+                          className="p-2 rounded-lg text-rose-400 hover:bg-rose-950/40 shrink-0"
+                          title="Excluir este botão"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {allNodes && allNodes.length > 0 && onSetTargetNode && (
+                      <div className="pt-0.5">
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                          <span>Destino Conectado (Saída #{index + 1}):</span>
+                          {targetNode ? (
+                            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                              Conectado a: {targetNode.data?.label || targetNode.id}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 italic">Desconectado</span>
+                          )}
+                        </div>
+                        <select
+                          value={connectedEdge?.target || ''}
+                          onChange={(e) => onSetTargetNode(node.id, e.target.value, handleId)}
+                          className="w-full bg-dark-900 border border-brand-500/40 rounded-xl px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-400"
+                        >
+                          <option value="">-- Selecione o Próximo Card deste Botão --</option>
+                          {allNodes.filter((n: FlowNode) => n.id !== node.id).map((n: FlowNode) => (
+                            <option key={n.id} value={n.id}>
+                              ➡️ {n.data?.label || n.id}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
-                  <Input
-                    value={btn.title || ''}
-                    onChange={(e) => {
-                      const updated = [...(config.buttons || [])];
-                      updated[index] = { ...btn, title: e.target.value };
-                      handleConfigChange('buttons', updated);
-                    }}
-                    placeholder={`Texto do Botão ${index + 1}`}
-                  />
-                  {(config.buttons || []).length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = (config.buttons || []).filter((_: any, i: number) => i !== index);
-                        handleConfigChange('buttons', updated);
-                      }}
-                      className="p-2 rounded-lg text-rose-400 hover:bg-rose-950/40"
-                      title="Excluir este botão"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
 
               {(config.buttons || []).length < 3 && (
                 <Button
@@ -1412,30 +1505,153 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {/* 12. Check Contact (Primeiro Contato vs Contato Salvo) */}
         {nodeType === 'check_contact' && (
           <div className="space-y-4">
-            <div className="p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-indigo-200 space-y-1">
+            <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-indigo-200 space-y-1.5 shadow-lg shadow-indigo-950/20">
               <span className="font-bold flex items-center gap-1.5 text-indigo-300">
-                <Users className="w-3.5 h-3.5" />
-                Detecção Inteligente de Cliente:
+                <Users className="w-4 h-4 text-indigo-400" />
+                Detecção Inteligente: Novo Contato vs Contato Salvo
               </span>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Este nó verifica se o número do WhatsApp é um <strong>Primeiro Contato (Novo Cliente)</strong> ou um <strong>Contato Já Salvo (Cliente Recorrente)</strong>.
+                Verifica automaticamente se quem enviou mensagem é um <strong>Primeiro Contato (Novo Cliente)</strong> ou um <strong>Contato Já Salvo (Cliente Recorrente)</strong> no banco/CRM.
               </p>
             </div>
 
-            <div className="p-3 rounded-xl bg-dark-950/80 border border-white/5 space-y-2.5">
-              <span className="text-xs font-semibold text-indigo-400 block">
-                Saídas de Ramificação no Fluxo:
+            {/* Ramificações e Conexão das Saídas */}
+            <div className="p-3.5 rounded-xl bg-dark-950/80 border border-white/10 space-y-3">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <GitBranch className="w-3.5 h-3.5 text-indigo-400" />
+                Saídas de Ramificação no Fluxo
               </span>
-              <div className="flex items-center gap-2 text-xs text-slate-200">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                <span><strong>Saída 1 (Verde):</strong> Novo Contato (1ª vez que fala no WhatsApp)</span>
+
+              {/* Ramo 1: Novo Cliente */}
+              <div className="p-2.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold text-emerald-300">
+                      Saída 1: Se for Novo Cliente (1ª Vez)
+                    </span>
+                  </div>
+                  {onStartConnecting && (
+                    <button
+                      type="button"
+                      onClick={() => onStartConnecting(node, 'is_new', 'Novo Cliente')}
+                      className="px-2 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition-all"
+                    >
+                      Ligar Saída 🟢
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Ideal para direcionar para nós de perguntas como: "Qual o seu nome?", coleta de dados ou cadastro inicial.
+                </p>
+                {allNodes && allNodes.length > 0 && onSetTargetNode && (
+                  <div className="pt-1">
+                    <label className="block text-[10px] font-medium text-slate-300 mb-1">
+                      Destino Conectado:
+                    </label>
+                    <select
+                      value={edges?.find((e: any) => e.source === node.id && (e.sourceHandle === 'is_new' || e.sourceHandle?.includes('new') || e.sourceHandle?.includes('novo')))?.target || ''}
+                      onChange={(e) => onSetTargetNode(node.id, e.target.value, 'is_new')}
+                      className="w-full bg-dark-900 border border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                    >
+                      <option value="">-- Selecione o Próximo Passo --</option>
+                      {allNodes.filter((n: FlowNode) => n.id !== node.id).map((n: FlowNode) => (
+                        <option key={n.id} value={n.id}>
+                          ➡️ {n.data?.label || n.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-200">
-                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-                <span><strong>Saída 2 (Azul):</strong> Contato Já Salvo (Cliente cadastrado)</span>
+
+              {/* Ramo 2: Cliente Já Salvo */}
+              <div className="p-2.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="text-xs font-bold text-cyan-300">
+                      Saída 2: Se for Cliente Já Salvo (Recorrente)
+                    </span>
+                  </div>
+                  {onStartConnecting && (
+                    <button
+                      type="button"
+                      onClick={() => onStartConnecting(node, 'is_existing', 'Cliente Salvo')}
+                      className="px-2 py-0.5 rounded-md bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold transition-all"
+                    >
+                      Ligar Saída 🔵
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Ideal para enviar mensagem de boas-vindas com nome ("Que bom ter você de volta, *{'{{nome_cliente}}'}*!") ou ir direto ao catálogo/menu.
+                </p>
+                {allNodes && allNodes.length > 0 && onSetTargetNode && (
+                  <div className="pt-1">
+                    <label className="block text-[10px] font-medium text-slate-300 mb-1">
+                      Destino Conectado:
+                    </label>
+                    <select
+                      value={edges?.find((e: any) => e.source === node.id && (e.sourceHandle === 'is_existing' || e.sourceHandle?.includes('exist') || e.sourceHandle?.includes('salvo') || e.sourceHandle?.includes('recorrente')))?.target || ''}
+                      onChange={(e) => onSetTargetNode(node.id, e.target.value, 'is_existing')}
+                      className="w-full bg-dark-900 border border-cyan-500/40 rounded-xl px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                    >
+                      <option value="">-- Selecione o Próximo Passo --</option>
+                      {allNodes.filter((n: FlowNode) => n.id !== node.id).map((n: FlowNode) => (
+                        <option key={n.id} value={n.id}>
+                          ➡️ {n.data?.label || n.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 
+            {/* Configurações de Detecção */}
+            <div className="p-3.5 rounded-xl bg-dark-950/80 border border-white/10 space-y-3">
+              <span className="text-xs font-bold text-white block">
+                ⚙️ Configurações de Identificação
+              </span>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium text-slate-300">Critério para considerar Contato Salvo:</label>
+                <select
+                  value={config.checkCriteria || 'crm_or_name'}
+                  onChange={(e) => handleConfigChange('checkCriteria', e.target.value)}
+                  className="w-full rounded-xl bg-dark-850 border border-slate-700/60 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="crm_or_name">✅ Cadastro no CRM ou Nome Salvo (Padrão Recomendado)</option>
+                  <option value="appointment_or_order">📅 Histórico de Agendamento ou Pedido Confirmado</option>
+                  <option value="tag">🏷️ Apenas se possuir Tag de Cliente (ex: VIP, Cliente)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium text-slate-300">Origem do Telefone para Busca:</label>
+                <select
+                  value={config.phoneMode || 'sender'}
+                  onChange={(e) => handleConfigChange('phoneMode', e.target.value)}
+                  className="w-full rounded-xl bg-dark-850 border border-slate-700/60 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="sender">📱 WhatsApp do Remetente (Automático)</option>
+                  <option value="variable">🔤 Variável coletada em pergunta anterior</option>
+                </select>
+              </div>
+
+              {config.phoneMode === 'variable' && (
+                <Input
+                  label="Nome da Variável com o Telefone"
+                  value={config.phoneVariable || ''}
+                  onChange={(e) => handleConfigChange('phoneVariable', e.target.value)}
+                  placeholder="Ex: {{telefone_digitado}} ou telefone_contato"
+                  className="text-xs font-mono"
+                />
+              )}
+            </div>
+
+            {/* Variáveis Geradas */}
             <div className="p-3 rounded-xl bg-dark-950/80 border border-white/5 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-indigo-400">
@@ -1447,8 +1663,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 <VariableBadge name="is_primeiro_contato" />
                 <VariableBadge name="tipo_cliente" />
                 <VariableBadge name="nome_cliente" />
+                <VariableBadge name="primeiro_nome" />
                 <VariableBadge name="telefone_whatsapp" />
-                <VariableBadge name="total_agendamentos" />
                 <VariableBadge name="tags_contato" />
               </div>
             </div>
@@ -1469,7 +1685,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             </div>
 
             {/* 1. Nome do Cliente */}
-            <div className="p-3 rounded-xl bg-dark-950/80 border border-white/5 space-y-2.5">
+            <div className="p-3.5 rounded-xl bg-dark-950/80 border border-white/10 space-y-2.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-white flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-cyan-400" />
@@ -1477,42 +1693,90 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 </label>
                 <span className="text-[10px] text-cyan-400 font-mono">1-Clique Inserir</span>
               </div>
+
+              {/* Input com binding bidirecional confiável */}
               <Input
-                value={config.contactName ?? config.nameField ?? '{{nome_cliente}}'}
+                value={config.contactName !== undefined ? config.contactName : (config.nameField !== undefined ? config.nameField : '{{nome_cliente}}')}
                 onChange={(e) => {
-                  handleConfigChange('contactName', e.target.value);
-                  handleConfigChange('nameField', e.target.value);
+                  const val = e.target.value;
+                  handleConfigChange({
+                    contactName: val,
+                    nameField: val,
+                  });
                 }}
-                placeholder="Ex: {{nome_cliente}} ou Maria Oliveira"
+                placeholder="Ex: {{resposta_usuario}} ou Maria Oliveira"
                 className="text-xs font-mono"
               />
-              <div className="flex flex-wrap gap-1 pt-0.5">
-                {[
-                  { tag: '{{nome_cliente}}', label: 'Nome Completo' },
-                  { tag: '{{primeiro_nome}}', label: '1º Nome' },
-                  { tag: '{{nome}}', label: 'Nome' },
-                  { tag: '{{resposta_usuario}}', label: 'Última Resposta' },
-                ].map((item) => (
-                  <button
-                    key={item.tag}
-                    type="button"
-                    onClick={() => {
-                      handleConfigChange('contactName', item.tag);
-                      handleConfigChange('nameField', item.tag);
+
+              {/* Botões Rápidos de Inserção de Variável */}
+              <div className="space-y-1.5 pt-0.5">
+                <span className="text-[10px] font-semibold text-slate-400 block">
+                  Inserir Variável Rápida no Nome:
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { tag: '{{resposta_usuario}}', label: 'Última Pergunta' },
+                    { tag: '{{nome_cliente}}', label: 'Nome Completo' },
+                    { tag: '{{primeiro_nome}}', label: '1º Nome' },
+                    { tag: '{{nome}}', label: 'Nome' },
+                    { tag: '{{cliente_nome}}', label: 'CRM Nome' },
+                  ].map((item) => {
+                    const currentVal = config.contactName !== undefined ? config.contactName : (config.nameField !== undefined ? config.nameField : '{{nome_cliente}}');
+                    const isActive = currentVal === item.tag;
+                    return (
+                      <button
+                        key={item.tag}
+                        type="button"
+                        onClick={() => {
+                          handleConfigChange({
+                            contactName: item.tag,
+                            nameField: item.tag,
+                          });
+                        }}
+                        className={cn(
+                          "px-2 py-1 rounded-lg font-mono text-[10px] transition-all border flex items-center gap-1",
+                          isActive
+                            ? "bg-cyan-500/25 text-cyan-200 border-cyan-400 font-bold shadow-xs ring-1 ring-cyan-400/40"
+                            : "bg-dark-900 hover:bg-cyan-950/80 text-cyan-300 border-slate-700/80 hover:border-cyan-500/60"
+                        )}
+                      >
+                        <span>+ {item.tag}</span>
+                        <span className="text-[9px] text-slate-400">({item.label})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-1.5 pt-1">
+                  <span className="text-[10px] text-slate-400">Outras variáveis:</span>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const vTag = `{{${e.target.value}}}`;
+                        handleConfigChange({
+                          contactName: vTag,
+                          nameField: vTag,
+                        });
+                      }
                     }}
-                    className="px-2 py-0.5 rounded-md bg-dark-900 hover:bg-cyan-950/80 text-cyan-300 border border-slate-700/80 hover:border-cyan-500/60 font-mono text-[10px] transition-colors"
+                    className="bg-dark-850 border border-slate-700/60 rounded-lg px-2 py-1 text-[10px] text-cyan-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                   >
-                    + {item.tag}
-                  </button>
-                ))}
+                    <option value="">+ Escolher outra variável do fluxo...</option>
+                    {SYSTEM_VARIABLES_LIST.map((v) => (
+                      <option key={v.key} value={v.key}>{v.key} — {v.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <p className="text-[10px] text-slate-500">
-                Você pode digitar um nome fixo ou usar uma variável coletada em nós de pergunta anteriores.
+
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                💡 Dica: Se você perguntou o nome do cliente no passo anterior, use <code>{'{{resposta_usuario}}'}</code> ou a variável que configurou na pergunta.
               </p>
             </div>
 
             {/* 2. WhatsApp do Cliente */}
-            <div className="p-3 rounded-xl bg-dark-950/80 border border-white/5 space-y-2.5">
+            <div className="p-3.5 rounded-xl bg-dark-950/80 border border-white/10 space-y-2.5">
               <label className="text-xs font-bold text-white flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-emerald-400" />
                 WhatsApp do Cliente
@@ -1565,7 +1829,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             </div>
 
             {/* 3. Foto de Perfil do WhatsApp */}
-            <div className="p-3 rounded-xl bg-dark-950/80 border border-white/5 space-y-2.5">
+            <div className="p-3.5 rounded-xl bg-dark-950/80 border border-white/10 space-y-2.5">
               <label className="text-xs font-bold text-white flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-purple-400" />
                 Foto de Perfil do Cliente
@@ -1601,7 +1865,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             </div>
 
             {/* 4. Dados Complementares do CRM (Pitoco de Gente) */}
-            <div className="p-3 rounded-xl bg-dark-950/80 border border-white/5 space-y-3">
+            <div className="p-3.5 rounded-xl bg-dark-950/80 border border-white/10 space-y-3">
               <span className="text-xs font-bold text-white block">
                 👶 Dados de Enxoval & CRM (Pitoco de Gente)
               </span>
@@ -1648,10 +1912,13 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   Tags do Cliente (separadas por vírgula):
                 </label>
                 <Input
-                  value={config.tags || config.tagsField || 'Cliente WhatsApp, Bot'}
+                  value={config.tags !== undefined ? config.tags : (config.tagsField ?? 'Cliente WhatsApp, Bot')}
                   onChange={(e) => {
-                    handleConfigChange('tags', e.target.value);
-                    handleConfigChange('tagsField', e.target.value);
+                    const val = e.target.value;
+                    handleConfigChange({
+                      tags: val,
+                      tagsField: val,
+                    });
                   }}
                   placeholder="Ex: Cliente WhatsApp, Enxoval, VIP"
                   className="text-xs"
@@ -1699,7 +1966,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   type="checkbox"
                   checked={config.updateActiveConversation !== false}
                   onChange={(e) => handleConfigChange('updateActiveConversation', e.target.checked)}
-                  className="rounded bg-dark-900 border-white/10 text-cyan-500"
+                  className="w-4 h-4 rounded border-white/20 bg-dark-800 text-cyan-500 focus:ring-cyan-500"
                 />
               </div>
             </div>
@@ -1764,7 +2031,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             <div className="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/30 text-xs text-amber-200 space-y-1">
               <span className="font-bold flex items-center gap-1.5 text-amber-300">
                 <StoreIcon className="w-4 h-4" />
-                Seleção de Filial / Loja (3 Saídas)
+                Seleção de Filial / Loja (Saídas Dedicadas)
               </span>
               <p className="text-[11px] text-slate-300 leading-relaxed">
                 Permite ao cliente escolher com qual unidade física ou atendimento online deseja falar. Cada filial possui uma <strong>saída dedicada</strong> no fluxo.
@@ -1779,10 +2046,36 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               placeholder="Mensagem de saudação e apresentação das lojas..."
             />
 
-            <div className="p-3 rounded-xl bg-dark-950/80 border border-white/5 space-y-2.5">
+            {/* Atalhos Rápidos de Variáveis */}
+            <div className="p-2.5 rounded-xl bg-dark-950/80 border border-amber-500/20 text-[11px] text-slate-300 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-amber-300 text-[10px] uppercase tracking-wider">Variáveis Disponíveis:</span>
+                <span className="text-[9.5px] text-slate-400">Toque para inserir</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { tag: '{{nome_cliente}}', label: 'Nome Cliente' },
+                  { tag: '{{primeiro_nome}}', label: '1º Nome' },
+                  { tag: '{{empresa}}', label: 'Empresa' },
+                  { tag: '{{bot_nome}}', label: 'Nome do Bot' },
+                ].map((v) => (
+                  <button
+                    key={v.tag}
+                    type="button"
+                    onClick={() => handleConfigChange('introMessage', `${config.introMessage || ''} ${v.tag}`)}
+                    className="px-2 py-0.5 rounded-md bg-dark-900 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 text-[10px] font-mono transition-all"
+                    title={`Inserir ${v.label}`}
+                  >
+                    + {v.tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-dark-950/80 border border-white/5 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-amber-400">
-                  Lojas do seu Painel Administrativo:
+                  Lojas e Conexões de Saída:
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
                   {stores.length > 0 ? `${stores.length} lojas ativas` : '3 lojas'}
@@ -1790,52 +2083,100 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </div>
               
               <p className="text-[10px] text-slate-400 leading-tight">
-                Cada loja abaixo terá uma <strong>saída dedicada no card</strong> para você conectar às próximas etapas do fluxo:
+                Cada loja abaixo possui uma <strong>saída independente</strong>. Conecte-as aos cards de atendimento correspondentes:
               </p>
 
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
                 {(stores.length > 0 ? stores : [
                   { id: 'store-001', name: 'Loja Matriz — Centro', city: 'Recife - PE', address: 'Rua do Sol, 120' },
                   { id: 'store-002', name: 'Loja Ipojuca - Filial', city: 'Ipojuca - PE', address: 'Rodovia PE-060' },
                   { id: 'store-003', name: 'Atendimento Geral / E-commerce', city: 'Digital', address: 'Online / WhatsApp' },
                 ]).map((st: any, idx: number) => {
+                  const handleId = st.id || `store-${idx + 1}`;
                   const isSelected = !Array.isArray(config.selectedStores) || config.selectedStores.length === 0 || config.selectedStores.includes(st.id) || config.selectedStores.includes(st.slug);
+                  const connectedEdge = edges?.find((e: any) => e.source === node.id && (
+                    e.sourceHandle === handleId || 
+                    e.sourceHandle === st.id || 
+                    e.sourceHandle === st.slug ||
+                    e.sourceHandle === `store_${st.slug}` ||
+                    (st.id === 'store-001' && (e.sourceHandle === 'store_matriz' || e.sourceHandle === 'matriz' || e.sourceHandle === 'store-001')) ||
+                    (st.id === 'store-002' && (e.sourceHandle === 'store_ipojuca' || e.sourceHandle === 'store_boulevard' || e.sourceHandle === 'ipojuca' || e.sourceHandle === 'store-002')) ||
+                    (st.id === 'store-003' && (e.sourceHandle === 'store_ecommerce' || e.sourceHandle === 'ecommerce' || e.sourceHandle === 'store-003'))
+                  ));
+                  const targetNode = allNodes?.find((n: FlowNode) => n.id === connectedEdge?.target);
+
                   return (
                     <div 
                       key={st.id || idx} 
-                      onClick={() => {
-                        const current = Array.isArray(config.selectedStores) && config.selectedStores.length > 0 
-                          ? config.selectedStores 
-                          : stores.map(s => s.id);
-                        const next = current.includes(st.id) 
-                          ? current.filter((id: string) => id !== st.id)
-                          : [...current, st.id];
-                        handleConfigChange('selectedStores', next.length === stores.length ? [] : next);
-                      }}
                       className={cn(
-                        "p-2.5 rounded-xl border flex items-center justify-between text-xs cursor-pointer transition-all",
+                        "p-3 rounded-xl border space-y-2 transition-all",
                         isSelected
-                          ? "bg-amber-950/30 border-amber-500/40 text-white"
+                          ? "bg-amber-950/20 border-amber-500/40 text-white"
                           : "bg-dark-900/50 border-white/5 text-slate-400 opacity-60 hover:opacity-100"
                       )}
                     >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <div className={cn(
-                          "w-4 h-4 rounded-md border flex items-center justify-center text-[10px] shrink-0 font-bold",
-                          isSelected ? "bg-amber-500 border-amber-400 text-dark-950" : "border-white/20"
-                        )}>
-                          {isSelected && '✓'}
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className={cn(
+                            "w-4 h-4 rounded-md border flex items-center justify-center text-[10px] shrink-0 font-bold",
+                            isSelected ? "bg-amber-500 border-amber-400 text-dark-950" : "border-white/20"
+                          )}>
+                            {isSelected && '✓'}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-bold text-white block truncate">
+                              {st.name}
+                            </span>
+                            <p className="text-[10px] text-slate-400 truncate">{st.address || st.city || 'Filial Oficial'}</p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <span className="font-bold text-white block truncate">
-                            {st.name}
-                          </span>
-                          <p className="text-[10px] text-slate-400 truncate">{st.address || st.city || 'Filial Oficial'}</p>
-                        </div>
+                        <span className="text-[9.5px] px-2 py-0.5 rounded-md bg-white/5 text-amber-300 font-mono shrink-0 ml-2 border border-white/5">
+                          Saída #{idx + 1}
+                        </span>
                       </div>
-                      <span className="text-[9.5px] px-2 py-0.5 rounded-md bg-white/5 text-amber-300 font-mono shrink-0 ml-2 border border-white/5">
-                        Saída #{idx + 1}
-                      </span>
+
+                      {allNodes && allNodes.length > 0 && onSetTargetNode && (
+                        <div className="pt-2 border-t border-white/5">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                            <span>Destino da Saída:</span>
+                            {targetNode ? (
+                              <span className="text-amber-300 font-semibold flex items-center gap-1 truncate max-w-[180px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                {targetNode.data?.label || targetNode.id}
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 italic">Desconectado</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={connectedEdge?.target || ''}
+                              onChange={(e) => onSetTargetNode(node.id, e.target.value, handleId)}
+                              className="flex-1 bg-dark-900 border border-amber-500/40 rounded-xl px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            >
+                              <option value="">-- Selecione o Próximo Card para esta Filial --</option>
+                              {allNodes.filter((n: FlowNode) => n.id !== node.id).map((n: FlowNode) => (
+                                <option key={n.id} value={n.id}>
+                                  ➡️ {n.data?.label || n.id}
+                                </option>
+                              ))}
+                            </select>
+                            {onStartConnecting && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onStartConnecting(node, handleId, st.name);
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold shrink-0 transition-all"
+                                title="Ligar saída desta loja no canvas"
+                              >
+                                ⚡ Ligar
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1847,7 +2188,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               value={config.storeVarName || 'loja_escolhida'}
               onChange={(e) => handleConfigChange('storeVarName', e.target.value)}
               placeholder="loja_escolhida"
-              hint="Armazena o nome da loja selecionada (ex: Matriz Centro, Loja Ipojuca, Loja Virtual)."
+              hint="Armazena o nome da loja selecionada (ex: Loja Matriz — Centro, Loja Ipojuca - Filial)."
             />
           </div>
         )}

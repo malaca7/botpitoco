@@ -409,6 +409,12 @@ export const HumanHandoffNode: React.FC<NodeProps> = ({ id, selected, data }) =>
 
 export const CheckContactNode: React.FC<NodeProps> = ({ id, selected, data }) => {
   const nodeData = data as unknown as FlowNodeData;
+  const config = nodeData.config || {};
+  const criteriaLabel = config.checkCriteria === 'appointment_or_order' 
+    ? 'Agendamento/Pedido' 
+    : config.checkCriteria === 'tag' 
+    ? 'Tag de Cliente' 
+    : 'CRM / Cadastro no Banco';
 
   const outputs = [
     { id: 'is_new', label: 'Novo Contato (1ª Vez)', color: '!bg-emerald-400' },
@@ -419,7 +425,7 @@ export const CheckContactNode: React.FC<NodeProps> = ({ id, selected, data }) =>
     <BaseNode
       id={id}
       selected={selected}
-      title={nodeData.label || 'Verificar Contato'}
+      title={nodeData.label || 'Verificar Contato (Novo vs Salvo)'}
       subtitle="Primeiro Contato vs Contato Salvo"
       icon={<Users className="w-4 h-4" />}
       iconBg="bg-indigo-600"
@@ -429,16 +435,39 @@ export const CheckContactNode: React.FC<NodeProps> = ({ id, selected, data }) =>
       customOutputs={outputs}
       isConfigured={true}
     >
-      <div className="p-2.5 rounded-xl bg-dark-950/90 border border-indigo-500/20 text-[10px] text-slate-300 space-y-1.5">
+      <div className="p-2.5 rounded-xl bg-dark-950/90 border border-indigo-500/20 text-[10px] text-slate-300 space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-indigo-400 font-bold">Variáveis Geradas:</span>
-          <span className="text-emerald-400 font-mono text-[9px]">1-Clique Copiar</span>
+          <span className="text-indigo-300 font-bold flex items-center gap-1">
+            <UserCheck className="w-3 h-3 text-indigo-400" />
+            Critério:
+          </span>
+          <span className="text-[9px] bg-indigo-950/80 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-800/60 font-medium">
+            {criteriaLabel}
+          </span>
         </div>
-        <div className="flex flex-wrap gap-1 pt-0.5">
-          <VariableBadge name="nome_cliente" />
-          <VariableBadge name="telefone_whatsapp" />
-          <VariableBadge name="is_primeiro_contato" />
-          <VariableBadge name="total_compras" />
+
+        <div className="grid grid-cols-2 gap-1.5 pt-0.5 text-[9.5px]">
+          <div className="p-1.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-emerald-300">
+            <span className="font-bold block">🟢 1ª Vez (Novo)</span>
+            <span className="text-[8.5px] text-slate-400">Coletar nome e dados</span>
+          </div>
+          <div className="p-1.5 rounded-lg bg-cyan-950/30 border border-cyan-500/30 text-cyan-300">
+            <span className="font-bold block">🔵 Salvo (Recorrente)</span>
+            <span className="text-[8.5px] text-slate-400">Saudação com nome</span>
+          </div>
+        </div>
+
+        <div className="pt-1 border-t border-white/5 space-y-1">
+          <div className="flex items-center justify-between text-[9px]">
+            <span className="text-slate-400">Variáveis Disponíveis:</span>
+            <span className="text-emerald-400 font-mono">1-Clique Copiar</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <VariableBadge name="is_primeiro_contato" />
+            <VariableBadge name="nome_cliente" />
+            <VariableBadge name="primeiro_nome" />
+            <VariableBadge name="telefone_whatsapp" />
+          </div>
         </div>
       </div>
     </BaseNode>
@@ -576,7 +605,7 @@ export const UpdateContactNode: React.FC<NodeProps> = ({ id, selected, data }) =
       hasOutput={true}
       isConfigured={Boolean(contactName || config.tags || config.phoneMode || hasPhoto)}
     >
-      <div className="space-y-1.5 p-2 rounded-xl bg-dark-950/80 border border-cyan-500/20 text-[11px] text-slate-300">
+      <div className="space-y-1.5 p-2.5 rounded-xl bg-dark-950/80 border border-cyan-500/20 text-[11px] text-slate-300">
         {contactName ? (
           <div className="flex items-center gap-1.5">
             <span className="text-cyan-400 font-semibold text-[10px]">Nome: </span>
@@ -585,7 +614,7 @@ export const UpdateContactNode: React.FC<NodeProps> = ({ id, selected, data }) =
         ) : (
           <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
             <span className="text-cyan-400 font-semibold">Nome: </span>
-            <span>Automático</span>
+            <span className="text-slate-300">Automático (WhatsApp)</span>
           </div>
         )}
 
@@ -623,6 +652,14 @@ export const UpdateContactNode: React.FC<NodeProps> = ({ id, selected, data }) =
             <VariableBadge name={config.customFieldValue || 'valor'} />
           </div>
         )}
+
+        <div className="pt-1.5 border-t border-white/5 flex items-center justify-between text-[9px] text-slate-400">
+          <span>Saída:</span>
+          <div className="flex gap-1">
+            <span className="font-mono text-cyan-300 bg-cyan-950/60 px-1 rounded border border-cyan-800/40">is_primeiro_contato=false</span>
+            <span className="font-mono text-emerald-300 bg-emerald-950/60 px-1 rounded border border-emerald-800/40">cliente_salvo</span>
+          </div>
+        </div>
       </div>
     </BaseNode>
   );

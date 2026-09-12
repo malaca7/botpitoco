@@ -481,14 +481,109 @@ export const FlowEngine = {
         replies.push({ type: 'text', content: confirmText });
       }
 
+      // 7.8 Store Selector Node (Escolha de Filial / Loja)
+      else if (nodeType === 'store_selector') {
+        let storesList = [
+          { id: 'store-001', name: 'Loja Matriz — Centro', city: 'Cabo - PE', slug: 'matriz' },
+          { id: 'store-002', name: 'Loja Ipojuca - Filial', city: 'Ipojuca - PE', slug: 'ipojuca' },
+          { id: 'store-003', name: 'Loja Virtual & E-commerce', city: 'Online', slug: 'ecommerce' },
+        ];
+        try {
+          const loadedStores = await StorageService.getStores();
+          if (Array.isArray(loadedStores) && loadedStores.length > 0) {
+            const active = loadedStores.filter((s: any) => s.is_active !== false);
+            if (active.length > 0) storesList = active;
+          }
+        } catch {}
+
+        const intro = substituteVariables(
+          config.introMessage || '🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?',
+          variables,
+          botProfile
+        );
+        const storesText = storesList.map((st: any) => `• *${st.name}*${st.city ? ` (${st.city})` : ''}`).join('\n');
+        const buttons = storesList.slice(0, 3).map((st: any, i: number) => ({
+          id: st.id || `store-${i + 1}`,
+          title: st.name.replace(/^Loja\s*/i, '').slice(0, 20),
+        }));
+
+        replies.push({
+          type: 'buttons',
+          content: `🏬 *Escolha de Filial / Loja:*\n\n${intro}\n\n${storesText}`,
+          buttons,
+        });
+      }
+
       // 8. Update Contact Profile Node
-      else if (nodeType === 'update_contact') {
-        if (config.contactName && variables[config.contactName]) {
-          variables.nome_cliente = variables[config.contactName];
+      else if (nodeType === 'update_contact' || nodeType === 'client_upsert') {
+        let nameVal = config.contactName || config.nameField;
+        if (nameVal) {
+          nameVal = substituteVariables(nameVal, variables, botProfile);
+          if (nameVal === (config.contactName || config.nameField) && !nameVal.includes('{{')) {
+            nameVal = variables[nameVal] || nameVal;
+          }
         }
+        if (!nameVal || nameVal === '{{nome_cliente}}' || nameVal === 'nome_cliente') {
+          nameVal = variables.nome_cliente || variables.resposta_usuario || variables.nome || contact?.name || 'Cliente';
+        }
+        variables.nome_cliente = nameVal;
+        variables.cliente_nome = nameVal;
+        variables.nome = nameVal;
+        variables.primeiro_nome = nameVal.split(' ')[0] || nameVal;
+        variables.is_primeiro_contato = false;
+        variables.is_novo_contato = false;
+        variables.is_existing_contact = true;
+        variables.cliente_salvo = true;
+
+        if (contact) {
+          contact.name = nameVal;
+          if (config.tags) {
+            const rawTags = config.tags;
+            const newTags = typeof rawTags === 'string' ? rawTags.split(',').map((t: string) => t.trim()) : rawTags;
+            contact.tags = Array.from(new Set([...(contact.tags || []), ...(newTags || [])]));
+          }
+        }
+
         if (config.customFieldKey) {
-          variables[config.customFieldKey] = variables[config.customFieldValue] || config.customFieldValue;
+          const cKey = config.customFieldKey.replace(/[{}]/g, '').trim();
+          variables[cKey] = substituteVariables(config.customFieldValue || '', variables, botProfile);
         }
+      }
+
+      // 8.5 Check Contact Node (Primeiro Contato vs Contato Salvo)
+      else if (nodeType === 'check_contact') {
+        const isNew = Boolean(
+          variables.is_primeiro_contato !== undefined
+            ? variables.is_primeiro_contato
+            : (!contact?.name || contact.name === 'Cliente' || contact.name === 'Cliente WhatsApp')
+        );
+
+        variables.is_primeiro_contato = isNew;
+        variables.is_novo_contato = isNew;
+        variables.is_existing_contact = !isNew;
+        variables.tipo_cliente = isNew ? 'novo' : 'recorrente';
+        if (!isNew && contact?.name) {
+          variables.nome_cliente = contact.name;
+          variables.primeiro_nome = contact.name.split(' ')[0] || contact.name;
+        }
+
+        const targetHandle = isNew ? 'is_new' : 'is_existing';
+        let branchEdge = edges.find((e) => e.source === currentNode?.id && e.sourceHandle === targetHandle);
+        if (!branchEdge) {
+          branchEdge = edges.find((e) => e.source === currentNode?.id && (isNew ? e.sourceHandle?.includes('new') : e.sourceHandle?.includes('exist')));
+        }
+        if (!branchEdge) {
+          branchEdge = edges.find((e) => e.source === currentNode?.id);
+        }
+        if (branchEdge) {
+          const nextNode = nodes.find((n) => n.id === branchEdge.target);
+          if (nextNode) {
+            history.push(nextNode.id);
+            currentNode = nextNode;
+            continue;
+          }
+        }
+        break;
       }
 
       // 9. Variable Setter Node

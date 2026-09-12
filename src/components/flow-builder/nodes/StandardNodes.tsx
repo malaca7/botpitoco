@@ -127,10 +127,12 @@ export const ButtonsNode: React.FC<NodeProps> = ({ id, selected, data }) => {
     { id: 'btn_2', title: 'Opção 2' },
   ];
 
+  const colors = ['!bg-primary-400', '!bg-cyan-400', '!bg-emerald-400', '!bg-amber-400'];
+
   const outputs = buttons.map((b, i) => ({
     id: b.id || `btn_${i + 1}`,
     label: b.title || `Botão ${i + 1}`,
-    color: '!bg-brand-400',
+    color: colors[i % colors.length],
   }));
 
   return (
@@ -161,10 +163,22 @@ export const ButtonsNode: React.FC<NodeProps> = ({ id, selected, data }) => {
           )}
         </div>
 
+        {/* Buttons List Preview */}
+        <div className="space-y-1">
+          {buttons.map((b, i) => (
+            <div key={b.id || i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/5 text-[10.5px]">
+              <span className="w-4 h-4 rounded bg-brand-500/20 text-brand-300 font-mono text-[9px] flex items-center justify-center font-bold shrink-0">
+                {i + 1}
+              </span>
+              <span className="text-white truncate font-medium flex-1">{b.title || `Opção ${i + 1}`}</span>
+            </div>
+          ))}
+        </div>
+
         {/* Buttons List Summary */}
-        <div className="text-[10px] text-brand-300 font-semibold flex items-center justify-between px-1">
+        <div className="text-[10px] text-brand-300 font-semibold flex items-center justify-between px-1 pt-0.5">
           <span>Opções Interativas:</span>
-          <span className="text-[9px] text-slate-500">{buttons.length} saídas ativas</span>
+          <span className="text-[9px] text-slate-400 font-mono">{buttons.length} saídas ativas</span>
         </div>
       </div>
     </BaseNode>

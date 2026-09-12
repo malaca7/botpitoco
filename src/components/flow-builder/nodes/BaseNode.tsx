@@ -210,18 +210,29 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
               return (
                 <div 
                   key={out.id} 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (connCtx) {
+                      if (isThisBranchSource) {
+                        connCtx.cancelConnecting();
+                      } else {
+                        connCtx.startConnecting(id, out.id, title, out.label);
+                      }
+                    }
+                  }}
                   className={cn(
-                    'relative flex flex-col items-center justify-center py-1.5 px-2 rounded-xl border transition-all text-center group/btn',
+                    'relative flex flex-col items-center justify-center py-1.5 px-2 rounded-xl border transition-all text-center group/btn cursor-pointer select-none',
                     isThisBranchSource
-                      ? 'bg-emerald-950/60 border-emerald-400 ring-2 ring-emerald-500/50'
-                      : 'bg-dark-900/90 border-white/10 hover:border-white/25'
+                      ? 'bg-emerald-950/60 border-emerald-400 ring-2 ring-emerald-500/50 shadow-md'
+                      : 'bg-dark-900/90 border-white/10 hover:border-emerald-500/50 hover:bg-dark-850 active:scale-98'
                   )}
+                  title={`Saída: ${out.label} (Toque para ligar a outra função ou arraste o ponto)`}
                 >
-                  <span className="text-[10px] font-semibold text-slate-200 truncate w-full px-0.5">
+                  <span className="text-[10px] font-semibold text-slate-200 truncate w-full px-0.5 group-hover/btn:text-white">
                     {out.label}
                   </span>
-                  <span className="text-[8.5px] text-slate-500 font-mono">
-                    Saída #{index + 1}
+                  <span className="text-[8.5px] text-slate-500 font-mono group-hover/btn:text-slate-300">
+                    {isThisBranchSource ? '⚡ Conectando...' : `Saída #${index + 1}`}
                   </span>
                   <Handle
                     id={out.id}

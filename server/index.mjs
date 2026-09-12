@@ -224,11 +224,25 @@ async function startWhatsApp() {
 
         const clientPhone = remoteJid.replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
         const clientName = msg.pushName || 'Cliente Pitoco';
-        const text = msg.message.conversation || 
-                     msg.message.extendedTextMessage?.text || 
-                     msg.message.buttonsResponseMessage?.selectedButtonId ||
-                     msg.message.listResponseMessage?.singleSelectReply?.selectedRowId ||
-                     '';
+        let text = msg.message.conversation || 
+                   msg.message.extendedTextMessage?.text || 
+                   msg.message.buttonsResponseMessage?.selectedButtonId ||
+                   msg.message.buttonsResponseMessage?.selectedDisplayText ||
+                   msg.message.templateButtonReplyMessage?.selectedId ||
+                   msg.message.templateButtonReplyMessage?.selectedDisplayText ||
+                   msg.message.listResponseMessage?.singleSelectReply?.selectedRowId ||
+                   msg.message.listResponseMessage?.title ||
+                   '';
+
+        if (!text && msg.message.interactiveResponseMessage) {
+          try {
+            const nativeFlow = msg.message.interactiveResponseMessage.nativeFlowResponseMessage;
+            if (nativeFlow?.paramsJson) {
+              const parsed = JSON.parse(nativeFlow.paramsJson);
+              text = parsed.id || parsed.selected_id || parsed.value || '';
+            }
+          } catch {}
+        }
 
         console.log(`📩 [WhatsApp Recebido] ${clientPhone} (${clientName}) [${remoteJid}]: "${text}"`);
         await recordMessageLocallyAndSupabase(clientPhone, clientName, 'inbound', text);

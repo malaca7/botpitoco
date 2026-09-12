@@ -193,7 +193,9 @@ export const FlowSimulator: React.FC<FlowSimulatorProps> = ({
 
         // Handle branching for multi-output nodes
         if (startNodeType === 'check_contact') {
-          const isNew = Boolean(activeVars.is_novo_contato || !activeVars.is_existing_contact);
+          const isNew = activeVars.is_primeiro_contato !== undefined
+            ? Boolean(activeVars.is_primeiro_contato)
+            : Boolean(activeVars.is_novo_contato || !activeVars.is_existing_contact);
           const targetHandle = isNew ? 'is_new' : 'is_existing';
           const branchEdge =
             outgoing.find(e => e.sourceHandle === targetHandle) ||
@@ -292,7 +294,10 @@ export const FlowSimulator: React.FC<FlowSimulatorProps> = ({
       } 
       // 4. Check Contact Node
       else if (type === 'check_contact') {
-        const isNew = Boolean(activeVars.is_novo_contato || !activeVars.is_existing_contact);
+        const isNew = activeVars.is_primeiro_contato !== undefined
+          ? Boolean(activeVars.is_primeiro_contato)
+          : Boolean(activeVars.is_novo_contato || !activeVars.is_existing_contact);
+
         activeVars.is_primeiro_contato = isNew;
         activeVars.is_novo_contato = isNew;
         activeVars.is_existing_contact = !isNew;
@@ -332,15 +337,26 @@ export const FlowSimulator: React.FC<FlowSimulatorProps> = ({
       }
       // 6. Update Contact / Client Upsert Node
       else if (type === 'update_contact' || type === 'client_upsert' || type === 'save_contact') {
-        const rawName = config.nameField || config.contactName;
-        const resolvedName = rawName
-          ? (activeVars[rawName.replace(/[{}]/g, '').trim()] || activeVars[rawName] || activeVars.nome_cliente)
-          : (activeVars.nome_cliente || activeVars.whatsapp_pushname || 'Cliente');
-        if (resolvedName) {
-          activeVars.nome_cliente = resolvedName;
-          activeVars.cliente_nome = resolvedName;
-          activeVars.nome = resolvedName;
+        const rawName = config.contactName || config.nameField;
+        let resolvedName = '';
+        if (rawName) {
+          resolvedName = substituteVariables(rawName, activeVars, p || undefined);
+          if (resolvedName === rawName && !rawName.includes('{{')) {
+            resolvedName = activeVars[rawName.replace(/[{}]/g, '').trim()] || rawName;
+          }
         }
+        if (!resolvedName || resolvedName === '{{nome_cliente}}' || resolvedName === 'nome_cliente') {
+          resolvedName = activeVars.nome_cliente || activeVars.resposta_usuario || activeVars.whatsapp_pushname || 'Cliente';
+        }
+        activeVars.nome_cliente = resolvedName;
+        activeVars.cliente_nome = resolvedName;
+        activeVars.nome = resolvedName;
+        activeVars.primeiro_nome = resolvedName.split(' ')[0] || resolvedName;
+        activeVars.is_primeiro_contato = false;
+        activeVars.is_novo_contato = false;
+        activeVars.is_existing_contact = true;
+        activeVars.cliente_salvo = true;
+
         if (config.customFieldKey && config.customFieldValue) {
           const fieldKey = config.customFieldKey.replace(/[{}]/g, '').trim();
           const cleanVal = config.customFieldValue.replace(/[{}]/g, '').trim();
@@ -826,11 +842,13 @@ export const FlowSimulator: React.FC<FlowSimulatorProps> = ({
     if (btnId) updatedVars.botao_id = btnId;
 
     // Store variables based on button type
-    if (btnId.startsWith('store_') || btnId.startsWith('store-')) {
+    if (btnId && (btnId.startsWith('store_') || btnId.startsWith('store-'))) {
       const storeName = btnTitle.replace(/^\d+️⃣?\s*/, '').trim();
       updatedVars.loja_escolhida = storeName;
       updatedVars.loja_id = btnId;
+      updatedVars.loja_nome = storeName;
       updatedVars.opcao_selecionada = storeName;
+      updatedVars.resposta_usuario = storeName;
     }
     if (btnId === 'shipping_motoboy' || btnId === 'shipping_correios' || btnId === 'shipping_pickup') {
       const shipMap: Record<string, { label: string; price: string; days: string }> = {
@@ -898,8 +916,13 @@ export const FlowSimulator: React.FC<FlowSimulatorProps> = ({
       const matchingEdge =
         edges.find((e) => e.source === currentNodeId && (
           e.sourceHandle === btnId ||
-          (idx >= 0 && (e.sourceHandle === `btn_${idx + 1}` || e.sourceHandle === `btn_${idx}`))
+          (idx >= 0 && (e.sourceHandle === `btn_${idx + 1}` || e.sourceHandle === `btn_${idx}`)) ||
+          (idx >= 0 && (e.sourceHandle === `store-${String(idx + 1).padStart(3, '0')}` || e.sourceHandle === `store_${idx + 1}`)) ||
+          (btnId === 'store-001' && (e.sourceHandle === 'store_matriz' || e.sourceHandle === 'matriz' || e.sourceHandle === 'store-001')) ||
+          (btnId === 'store-002' && (e.sourceHandle === 'store_ipojuca' || e.sourceHandle === 'store_boulevard' || e.sourceHandle === 'ipojuca' || e.sourceHandle === 'store-002')) ||
+          (btnId === 'store-003' && (e.sourceHandle === 'store_ecommerce' || e.sourceHandle === 'ecommerce' || e.sourceHandle === 'store-003'))
         )) ||
+        (idx >= 0 ? edges.filter((e) => e.source === currentNodeId)[idx] : null) ||
         edges.find((e) => e.source === currentNodeId && e.sourceHandle === btnId) ||
         edges.find((e) => e.source === currentNodeId);
 

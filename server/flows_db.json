@@ -786,8 +786,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "human_handoff",
         "position": {
-          "x": 960,
-          "y": 2011
+          "x": 990,
+          "y": 2475
         },
         "data": {
           "label": "Transferir para Humano",
@@ -813,7 +813,7 @@
           "config": {
             "expectedType": "text",
             "questionText": "Por favor, informe seu *Nome*:",
-            "variableName": "nome_cliente"
+            "variableName": "nome_clientenovo"
           },
           "nodeType": "question",
           "description": "Faz uma pergunta ao cliente e salva o texto digitado em uma variável.",
@@ -832,7 +832,7 @@
           "label": "Salvar / Vincular Dados",
           "config": {
             "tags": "Cliente WhatsApp, Bot",
-            "nameField": "{{nome_cliente}",
+            "nameField": "{{nome_cliente}}n",
             "phoneMode": "sender",
             "contactName": "{{nome_cliente}}",
             "phoneVarName": "telefone_whatsapp",
@@ -849,8 +849,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "show_catalog",
         "position": {
-          "x": 100,
-          "y": 2011
+          "x": 180,
+          "y": 2460
         },
         "data": {
           "label": "Vitrine da Loja Virtual",
@@ -865,12 +865,32 @@
         }
       },
       {
+        "id": "node-trigger-pitoco",
+        "flow_id": "flow-pitoco-001",
+        "type": "trigger",
+        "position": {
+          "x": 530,
+          "y": 100
+        },
+        "data": {
+          "label": "Gatilho Inicial",
+          "config": {
+            "keywords": "mlc",
+            "eventType": "keyword",
+            "matchType": "contains"
+          },
+          "nodeType": "trigger",
+          "description": "Dispara quando o cliente envia qualquer mensagem no WhatsApp",
+          "isConfigured": true
+        }
+      },
+      {
         "id": "node-measure_guide-1789176538133",
         "flow_id": "flow-pitoco-001",
         "type": "measure_guide",
         "position": {
-          "x": 530,
-          "y": 2011
+          "x": 555,
+          "y": 2385
         },
         "data": {
           "label": "Guia de Medidas (RN a 3 Anos)",
@@ -895,26 +915,6 @@
           "config": {},
           "nodeType": "check_contact",
           "description": "Bifurca o fluxo entre Primeiro Contato (1ª Vez) e Contato Salvo (Recorrente).",
-          "isConfigured": true
-        }
-      },
-      {
-        "id": "node-trigger-pitoco",
-        "flow_id": "flow-pitoco-001",
-        "type": "trigger",
-        "position": {
-          "x": 530,
-          "y": 100
-        },
-        "data": {
-          "label": "Gatilho Inicial",
-          "config": {
-            "keywords": "mlc",
-            "eventType": "keyword",
-            "matchType": "contains"
-          },
-          "nodeType": "trigger",
-          "description": "Dispara quando o cliente envia qualquer mensagem no WhatsApp",
           "isConfigured": true
         }
       },
@@ -961,8 +961,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "buttons",
         "position": {
-          "x": 530,
-          "y": 1695
+          "x": 540,
+          "y": 1950
         },
         "data": {
           "label": "Botões Interativos WhatsApp",
@@ -1413,6 +1413,27 @@
       "last_interaction": "2026-09-09T00:01:18.583Z",
       "updated_at": "2026-09-09T00:01:18.870Z",
       "whatsapp_pushname": "Rogerio"
+    },
+    "81999999999": {
+      "id": "contact-81999999999",
+      "name": "1",
+      "phone": "81999999999",
+      "tags": [
+        "Lead",
+        "Cliente",
+        "Cliente WhatsApp",
+        "Bot"
+      ],
+      "status": "active",
+      "is_registered": true,
+      "notes": "Cadastrado e atualizado pelo fluxo do bot",
+      "custom_fields": {
+        "nome_clientenovo": "1"
+      },
+      "created_at": "2026-09-12T20:01:08.130Z",
+      "last_interaction": "2026-09-12T20:01:08.781Z",
+      "updated_at": "2026-09-12T20:01:09.084Z",
+      "whatsapp_pushname": "Maria Teste"
     }
   },
   "conversations": {
@@ -1443,6 +1464,34 @@
       "assigned_attendant_id": "user-1788477817013",
       "assigned_to": "Jefferson",
       "updated_at": "2026-09-09T00:20:35.928Z"
+    },
+    "conv-81999999999": {
+      "id": "conv-81999999999",
+      "contact_id": "contact-81999999999",
+      "contact_name": "1",
+      "contact_phone": "81999999999",
+      "status": "bot",
+      "store_name": "Pitoco de Gente",
+      "started_at": "2026-09-12T20:01:08.130Z",
+      "unread_count": 0,
+      "created_at": "2026-09-12T20:01:08.130Z",
+      "last_message": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+      "last_message_at": "2026-09-12T20:01:09.084Z",
+      "updated_at": "2026-09-12T20:01:09.084Z"
+    },
+    "conv-81999999998": {
+      "id": "conv-81999999998",
+      "contact_id": "contact-81999999998",
+      "contact_name": "Juliana",
+      "contact_phone": "81999999998",
+      "status": "bot",
+      "store_name": "Pitoco de Gente",
+      "started_at": "2026-09-12T20:01:35.643Z",
+      "unread_count": 0,
+      "created_at": "2026-09-12T20:01:35.643Z",
+      "last_message": "🍼 *PITOCO DE GENTE — Moda Bebê & Enxovais*\nConfira nossos destaques mais amados:\n\n• *Body Suedine 100% Algodão*\n   💰 R$ 49,90 • 👶 RN a GG (Cores Lisas & Estampadas)\n\n• *Macacão Confort Zíper Duplo*\n   💰 R$ 89,90 • 👶 RN ao 3 Anos (Proteção no Queixo)\n\n• *Saída Maternidade Tricot Luxo (5 Peças)*\n   💰 R$ 199,90 • 👶 RN e P (Macacão + Manta + Body + Faixinha)\n\n• *Kit de Berço 9 Peças 200 Fios*\n   💰 R$ 389,00 • 🛏️ Padrão Americano (100% Algodão Hipoalergênico)\n\n_Para pedir ou verificar tamanhos (RN a 3 anos), basta nos chamar!_",
+      "last_message_at": "2026-09-12T20:01:37.047Z",
+      "updated_at": "2026-09-12T20:01:37.047Z"
     }
   },
   "messages": {
@@ -1863,6 +1912,91 @@
         "status": "pending",
         "created_at": "2026-09-09T00:20:31.300Z",
         "store_id": null
+      }
+    ],
+    "conv-81999999999": [
+      {
+        "id": "msg-1789243268130-lddt8",
+        "conversation_id": "conv-81999999999",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-12T20:01:08.130Z"
+      },
+      {
+        "id": "msg-1789243269062-kk52l",
+        "conversation_id": "conv-81999999999",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-12T20:01:09.062Z"
+      },
+      {
+        "id": "msg-1789243269074-7komr",
+        "conversation_id": "conv-81999999999",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-12T20:01:09.074Z"
+      },
+      {
+        "id": "msg-1789243269085-jg8bb",
+        "conversation_id": "conv-81999999999",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-12T20:01:09.084Z"
+      }
+    ],
+    "conv-81999999998": [
+      {
+        "id": "msg-1789243295643-s3cuk",
+        "conversation_id": "conv-81999999998",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-12T20:01:35.643Z"
+      },
+      {
+        "id": "msg-1789243295657-nvc3n",
+        "conversation_id": "conv-81999999998",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-12T20:01:35.656Z"
+      },
+      {
+        "id": "msg-1789243295673-79j13",
+        "conversation_id": "conv-81999999998",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-12T20:01:35.673Z"
+      },
+      {
+        "id": "msg-1789243296451-34zn3",
+        "conversation_id": "conv-81999999998",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Você escolheu a *Loja Ipojuca - Filial*, seu atendimento será personalizado para essa loja, o que você deseja:",
+        "status": "delivered",
+        "created_at": "2026-09-12T20:01:36.451Z"
+      },
+      {
+        "id": "msg-1789243297047-qo9a3",
+        "conversation_id": "conv-81999999998",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "🍼 *PITOCO DE GENTE — Moda Bebê & Enxovais*\nConfira nossos destaques mais amados:\n\n• *Body Suedine 100% Algodão*\n   💰 R$ 49,90 • 👶 RN a GG (Cores Lisas & Estampadas)\n\n• *Macacão Confort Zíper Duplo*\n   💰 R$ 89,90 • 👶 RN ao 3 Anos (Proteção no Queixo)\n\n• *Saída Maternidade Tricot Luxo (5 Peças)*\n   💰 R$ 199,90 • 👶 RN e P (Macacão + Manta + Body + Faixinha)\n\n• *Kit de Berço 9 Peças 200 Fios*\n   💰 R$ 389,00 • 🛏️ Padrão Americano (100% Algodão Hipoalergênico)\n\n_Para pedir ou verificar tamanhos (RN a 3 anos), basta nos chamar!_",
+        "status": "delivered",
+        "created_at": "2026-09-12T20:01:37.047Z"
       }
     ]
   },

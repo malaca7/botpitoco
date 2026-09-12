@@ -23,7 +23,7 @@ import { Button } from '../../components/ui/Button';
 import { useToast } from '../../contexts/ToastContext';
 import { useWhatsApp } from '../../contexts/WhatsAppContext';
 import { StorageService, getBackendUrl } from '../../lib/storage';
-import { Flow, FlowNode, FlowEdge, FlowNodeData } from '../../types';
+import { Flow, FlowNode, FlowEdge, FlowNodeData, Store } from '../../types';
 import { 
   Plus, 
   Edit3, 
@@ -418,6 +418,42 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
     setConnectingSource({ node, handleId: handleId || null, handleLabel });
     info('Modo Conexão Ativo', `Toque na função de destino para ligar "${node.data.label}".`);
   };
+
+  // Set specific target node for a source node and branch handle directly
+  const handleSetTargetNode = useCallback(
+    (sourceId: string, targetId: string, handleId?: string | null) => {
+      setEdges((eds) => {
+        // Remove existing edge from this source with same handle if any
+        const filtered = eds.filter(
+          (e) => !(e.source === sourceId && (e.sourceHandle || null) === (handleId || null))
+        );
+
+        if (!targetId) {
+          pushHistory(nodes, filtered);
+          setIsDirty(true);
+          return filtered;
+        }
+
+        const newEdge: Edge = {
+          id: `xy-edge__${sourceId}${handleId ? '-' + handleId : ''}-${targetId}`,
+          source: sourceId,
+          target: targetId,
+          sourceHandle: handleId || null,
+          targetHandle: null,
+          type: edgeType,
+          animated: true,
+          style: { stroke: '#06b6d4', strokeWidth: 2.5 },
+        };
+
+        const nextEdges = addEdge(newEdge, filtered);
+        pushHistory(nodes, nextEdges);
+        setIsDirty(true);
+        return nextEdges;
+      });
+      success('Saída Conectada', 'A ligação de ramificação foi atualizada com sucesso.');
+    },
+    [nodes, edgeType, setEdges, pushHistory, success]
+  );
 
   // Spawn node helper function
   const spawnNodeAtPosition = useCallback(
@@ -1278,6 +1314,9 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
                 onStartConnecting={handleStartConnecting}
                 width={inspectorWidth}
                 onWidthChange={setInspectorWidth}
+                allNodes={nodes as unknown as FlowNode[]}
+                edges={edges}
+                onSetTargetNode={handleSetTargetNode}
               />
             </div>
           )}
@@ -1489,11 +1528,14 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
                 onDeleteNode={handleDeleteSelectedNode}
                 onDuplicateNode={handleDuplicateSelectedNode}
                 onClose={() => setIsMobileInspectorOpen(false)}
-                onStartConnecting={(nd) => {
+                onStartConnecting={(nd, hId, hLbl) => {
                   setIsMobileInspectorOpen(false);
-                  handleStartConnecting(nd);
+                  handleStartConnecting(nd, hId, hLbl);
                 }}
                 width={600}
+                allNodes={nodes as unknown as FlowNode[]}
+                edges={edges}
+                onSetTargetNode={handleSetTargetNode}
               />
             </div>
 
