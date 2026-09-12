@@ -1332,7 +1332,9 @@ export async function syncFlowToSupabase(flow) {
       status: flow.status || (flow.is_active ? 'published' : 'draft'),
       is_active: isPublishing,
       version: flow.version || 1,
-      trigger_type: flow.trigger_type || 'keyword',
+      trigger_type: flow.trigger_type || 'Qualquer Mensagem Recebida',
+      keywords: flow.keywords || '',
+      trigger_keywords: flow.trigger_keywords || flow.keywords || '',
       store_id: flow.store_id || null,
       store_name: flow.store_name || null,
       node_count: flow.node_count || 0,
@@ -1415,29 +1417,19 @@ export function normalizeText(str) {
 }
 
 export function extractFlowKeywords(flow, flowNodes = [], dbNodes = []) {
-  const keywordsSet = new Set();
+  if (!flow) return [];
 
-  // 1. Dos nós do fluxo (trigger node)
-  const allNodes = [...(flowNodes || []), ...(dbNodes || [])];
-  for (const n of allNodes) {
-    const nType = n.data?.nodeType || n.type || n.node_type;
-    if (nType === 'trigger') {
-      let nodeData = n.data;
-      if (typeof nodeData === 'string') {
-        try { nodeData = JSON.parse(nodeData); } catch {}
-      }
-      const cfg = nodeData?.config || n.config || {};
-      const kwString = cfg.keywords || nodeData?.keywords || '';
-      if (kwString) {
-        String(kwString).split(',').forEach(k => {
-          const clean = normalizeText(k);
-          if (clean) keywordsSet.add(clean);
-        });
-      }
-    }
+  // Se o trigger_type for explicitamente "Qualquer Mensagem Recebida" / any_message,
+  // este fluxo é estritamente de atendimento geral e NUNCA deve capturar palavras-chave!
+  const trigType = String(flow.trigger_type || '').toLowerCase().trim();
+  const isAnyMessage = trigType.includes('qualquer') || trigType.includes('any_message') || trigType === 'mensagem recebida';
+  if (isAnyMessage) {
+    return [];
   }
 
-  // 2. Do próprio objeto do fluxo: flow.keywords ou flow.trigger_keywords
+  const keywordsSet = new Set();
+
+  // 1. Do próprio objeto do fluxo: flow.keywords ou flow.trigger_keywords
   if (flow.keywords) {
     const raw = Array.isArray(flow.keywords) ? flow.keywords.join(',') : String(flow.keywords);
     raw.split(',').forEach(k => {
@@ -1453,18 +1445,31 @@ export function extractFlowKeywords(flow, flowNodes = [], dbNodes = []) {
     });
   }
 
-  // 3. Se trigger_type contiver palavras entre parênteses ou após dois pontos
-  // Ex: "Palavra-Chave / Menu (#enxoval, menu, etc.)" ou "Palavra-Chave: enxoval, berco"
-  if (flow.trigger_type) {
-    const trigType = String(flow.trigger_type);
-    const parensMatch = trigType.match(/\(([^)]+)\)/);
-    if (parensMatch && parensMatch[1]) {
-      parensMatch[1].split(',').forEach(k => {
-        const clean = normalizeText(k.replace(/etc\.?|e outros|outros/gi, ''));
-        if (clean && clean.length >= 2) keywordsSet.add(clean);
-      });
+  // 2. Dos nós do fluxo (trigger node)
+  const allNodes = [...(flowNodes || []), ...(dbNodes || [])];
+  for (const n of allNodes) {
+    const nType = n.data?.nodeType || n.type || n.node_type;
+    if (nType === 'trigger') {
+      let nodeData = n.data;
+      if (typeof nodeData === 'string') {
+        try { nodeData = JSON.parse(nodeData); } catch {}
+      }
+      const cfg = nodeData?.config || n.config || {};
+      if (cfg.eventType !== 'any_message') {
+        const kwString = cfg.keywords || nodeData?.keywords || '';
+        if (kwString) {
+          String(kwString).split(',').forEach(k => {
+            const clean = normalizeText(k);
+            if (clean) keywordsSet.add(clean);
+          });
+        }
+      }
     }
-    const colonMatch = trigType.split(':')[1];
+  }
+
+  // 3. Se trigger_type contiver dois pontos com palavras (ex: "Palavra-Chave: enxoval, berco")
+  if (flow.trigger_type && trigType.includes(':')) {
+    const colonMatch = String(flow.trigger_type).split(':')[1];
     if (colonMatch) {
       colonMatch.split(',').forEach(k => {
         const clean = normalizeText(k);
@@ -1477,7 +1482,7 @@ export function extractFlowKeywords(flow, flowNodes = [], dbNodes = []) {
 }
 
 // Obter dinamicamente os fluxos e nós publicados diretamente do Supabase em tempo real
-export async function getActiveFlowAndGraph(db, preferredFlowId = null, incomingText = '') {
+export async function getActiveFlowAndGraph(db, preferredFlowId = null, incomingText = '', isWaitingForInput = false) {
   let activeFlows = [];
 
   // 1. Consultar diretamente TODOS os fluxos com status ATIVO no Supabase
@@ -1542,12 +1547,22 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
   let isKeywordMatch = false;
   const normIncoming = normalizeText(incomingText);
 
-  // A) PRIORIDADE ABSOLUTA: Verificar se a mensagem bate com palavras-chave de algum fluxo específico!
+  // A) PRIORIDADE 1: VERIFICAR SE A MENSAGEM BATE COM PALAVRAS-CHAVE DE QUALQUER FLUXO ATIVO!
   if (normIncoming) {
-    for (const flow of activeFlows) {
+    // Filtrar apenas fluxos que são de palavra-chave (não são "Qualquer Mensagem Recebida")
+    const keywordFlows = activeFlows.filter(flow => {
+      const trig = String(flow.trigger_type || '').toLowerCase();
+      if (trig.includes('qualquer') || trig.includes('any_message') || trig === 'mensagem recebida') {
+        return false;
+      }
       const flowNodes = allActiveNodes.filter(n => n.flow_id === flow.id);
       const kws = extractFlowKeywords(flow, flowNodes, db.nodes?.[flow.id]);
-      if (kws.length === 0) continue;
+      return kws.length > 0;
+    });
+
+    for (const flow of keywordFlows) {
+      const flowNodes = allActiveNodes.filter(n => n.flow_id === flow.id);
+      const kws = extractFlowKeywords(flow, flowNodes, db.nodes?.[flow.id]);
 
       const matched = kws.some(kw => {
         if (!kw) return false;
@@ -1563,8 +1578,8 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
           const wordRegex = new RegExp(`(^|\\s|[.,!?;])${escaped}(\\s|[.,!?;]|$)`, 'i');
           if (wordRegex.test(normIncoming)) return true;
         } catch {}
-        // Se a keyword tiver tamanho significativo (>= 4 letras), aceita substring
-        if (kw.length >= 4 && normIncoming.includes(kw)) return true;
+        // Se a keyword tiver tamanho significativo (>= 3 letras), aceita substring
+        if (kw.length >= 3 && normIncoming.includes(kw)) return true;
         return false;
       });
 
@@ -1577,28 +1592,25 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
     }
   }
 
-  // B) Se não bateu palavra-chave, manter o fluxo em andamento do usuário se ainda ativo
-  if (!candidateFlow && preferredFlowId) {
+  // B) Se NÃO bateu palavra-chave, mas o usuário está no meio de uma pergunta/input de fluxo anterior:
+  if (!candidateFlow && isWaitingForInput && preferredFlowId) {
     const prefFlow = activeFlows.find(f => f.id === preferredFlowId);
     if (prefFlow) {
-      // Se o fluxo preferido era exclusivo por palavra-chave, não mantém se não bateu
-      const prefKws = extractFlowKeywords(prefFlow, allActiveNodes.filter(n => n.flow_id === prefFlow.id), db.nodes?.[prefFlow.id]);
-      const isExclusivelyKeyword = prefKws.length > 0 && !(prefFlow.trigger_type || '').toLowerCase().includes('qualquer');
-      if (!isExclusivelyKeyword) {
-        candidateFlow = prefFlow;
-      }
+      candidateFlow = prefFlow;
+      console.log(`[FlowRunner] 💬 [INPUT EM ANDAMENTO] Mantendo fluxo ativo "${prefFlow.name}" (${prefFlow.id}) para captura de resposta.`);
     }
   }
 
-  // C) Caso contrário, disparar o fluxo de "Qualquer Mensagem Recebida"
+  // C) Caso contrário (interação que não é palavra-chave e não está respondendo pergunta):
+  // Executar o fluxo configurado para "Qualquer Mensagem Recebida"
   if (!candidateFlow) {
-    // Procura primeiro explicitamente um fluxo cujo gatilho seja "Qualquer Mensagem"
+    // 1. Procura fluxo explicitamente configurado com "Qualquer Mensagem"
     candidateFlow = activeFlows.find(f => {
       const trigType = (f.trigger_type || '').toLowerCase();
       return trigType.includes('qualquer') || trigType.includes('mensagem recebida') || trigType === 'any_message';
     });
 
-    // Se não encontrou por nome do gatilho, seleciona o primeiro que NÃO tenha palavras-chave obrigatórias
+    // 2. Se não encontrou por nome do gatilho, seleciona o primeiro que NÃO tenha palavras-chave obrigatórias
     if (!candidateFlow) {
       candidateFlow = activeFlows.find(f => {
         const kws = extractFlowKeywords(f, allActiveNodes.filter(n => n.flow_id === f.id), db.nodes?.[f.id]);
@@ -1606,10 +1618,12 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
       });
     }
 
-    // Último fallback seguro
+    // 3. Último fallback seguro
     if (!candidateFlow) {
       candidateFlow = activeFlows[0];
     }
+
+    console.log(`[FlowRunner] 💬 [QUALQUER MENSAGEM] Mensagem "${incomingText}" não acionou palavra-chave. Executando fluxo padrão: "${candidateFlow.name}" (${candidateFlow.id})`);
   }
 
   const flowId = candidateFlow.id;
@@ -1689,11 +1703,20 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
     return [];
   }
 
-  // Obter sessão atual para preservar fluxo em andamento
+  // Obter sessão atual para preservar fluxo em andamento se estiver aguardando resposta
   const existingSession = db.sessions?.[cleanPhone] || db.sessions?.[rawId];
+  const isSessionWaitingInput = Boolean(
+    existingSession?.waitingForVar ||
+    (existingSession?.activeButtons && existingSession.activeButtons.length > 0)
+  );
 
   // Dynamically resolve published flow, nodes, and edges
-  const { publishedFlow, nodes, edges, isKeywordMatch } = await getActiveFlowAndGraph(db, existingSession?.flowId, cleanInput);
+  const { publishedFlow, nodes, edges, isKeywordMatch } = await getActiveFlowAndGraph(
+    db, 
+    existingSession?.flowId, 
+    cleanInput, 
+    isSessionWaitingInput
+  );
 
   if (!publishedFlow) {
     const defaultReply = `Olá, *${senderName}*! Recebi sua mensagem: "${cleanInput}".\n\nNo momento, não há nenhum fluxo ativo publicado no painel administrativo.`;

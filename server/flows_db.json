@@ -226,7 +226,7 @@
       "id": "flow-1788911034109",
       "name": "teste 2",
       "description": "2",
-      "trigger_type": "Palavra-Chave / Menu (#enxoval, menu, etc.)",
+      "trigger_type": "Palavra-Chave / Menu",
       "keywords": "mlc, #enxoval, enxoval",
       "trigger_keywords": "mlc, #enxoval, enxoval",
       "store_id": null,
@@ -300,7 +300,9 @@
       "created_at": "2026-09-08T20:00:48.042417+00:00",
       "updated_at": "2026-09-09T00:39:25.571Z",
       "color": "#10b981",
-      "order_index": 0
+      "order_index": 0,
+      "keywords": "",
+      "trigger_keywords": ""
     }
   ],
   "nodes": {
@@ -767,8 +769,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "message",
         "position": {
-          "x": 580,
-          "y": 1440
+          "x": 530,
+          "y": 1000
         },
         "data": {
           "label": "Enviar Mensagem",
@@ -786,8 +788,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "human_handoff",
         "position": {
-          "x": 1060,
-          "y": 2975
+          "x": 990,
+          "y": 2475
         },
         "data": {
           "label": "Transferir para Humano",
@@ -805,8 +807,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "question",
         "position": {
-          "x": 100,
-          "y": 750
+          "x": 315,
+          "y": 540
         },
         "data": {
           "label": "Pergunta & Resposta",
@@ -825,8 +827,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "update_contact",
         "position": {
-          "x": 100,
-          "y": 1060
+          "x": 315,
+          "y": 770
         },
         "data": {
           "label": "Salvar / Vincular Dados",
@@ -849,8 +851,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "show_catalog",
         "position": {
-          "x": 100,
-          "y": 2975
+          "x": 180,
+          "y": 2460
         },
         "data": {
           "label": "Vitrine da Loja Virtual",
@@ -869,14 +871,14 @@
         "flow_id": "flow-pitoco-001",
         "type": "trigger",
         "position": {
-          "x": 580,
+          "x": 530,
           "y": 100
         },
         "data": {
           "label": "Gatilho Inicial",
           "config": {
-            "keywords": "mlc",
-            "eventType": "keyword",
+            "keywords": "",
+            "eventType": "any_message",
             "matchType": "contains"
           },
           "nodeType": "trigger",
@@ -889,8 +891,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "measure_guide",
         "position": {
-          "x": 580,
-          "y": 2975
+          "x": 555,
+          "y": 2385
         },
         "data": {
           "label": "Guia de Medidas (RN a 3 Anos)",
@@ -907,8 +909,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "check_contact",
         "position": {
-          "x": 580,
-          "y": 355
+          "x": 530,
+          "y": 300
         },
         "data": {
           "label": "Verificar Contato (Novo vs Salvo)",
@@ -923,8 +925,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "message",
         "position": {
-          "x": 580,
-          "y": 1755
+          "x": 530,
+          "y": 1220
         },
         "data": {
           "label": "Enviar Mensagem",
@@ -942,8 +944,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "store_selector",
         "position": {
-          "x": 580,
-          "y": 2070
+          "x": 530,
+          "y": 1440
         },
         "data": {
           "label": "Escolha de Loja / Filial",
@@ -961,8 +963,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "buttons",
         "position": {
-          "x": 580,
-          "y": 2525
+          "x": 540,
+          "y": 1950
         },
         "data": {
           "label": "Botões Interativos WhatsApp",
@@ -1412,7 +1414,7 @@
       "is_registered": true,
       "created_at": "2026-09-09T00:01:00.751Z",
       "last_interaction": "2026-09-09T00:01:18.583Z",
-      "updated_at": "2026-09-12T20:55:11.967Z",
+      "updated_at": "2026-09-12T20:55:11.970Z",
       "whatsapp_pushname": "Rogerio"
     },
     "81999999999": {
@@ -1453,9 +1455,9 @@
         "nome_clientenovo": "Malaquias",
         "nome_cliente": "Malaquias"
       },
-      "created_at": "2026-09-12T20:55:11.966Z",
-      "updated_at": "2026-09-12T20:55:11.967Z",
-      "last_interaction": "2026-09-12T20:55:11.967Z"
+      "created_at": "2026-09-12T20:55:11.970Z",
+      "updated_at": "2026-09-12T20:55:11.970Z",
+      "last_interaction": "2026-09-12T20:55:11.970Z"
     }
   },
   "conversations": {
@@ -1470,7 +1472,7 @@
       "store_name": "Pitoco de Gente",
       "contact_id": "contact-558196138924",
       "assigned_to": "Malaca",
-      "updated_at": "2026-09-12T20:55:11.967Z",
+      "updated_at": "2026-09-12T20:55:11.970Z",
       "assigned_attendant_id": null,
       "assigned_attendant_name": "Malaca"
     },
@@ -1485,7 +1487,7 @@
       "store_name": "Pitoco de Gente",
       "assigned_attendant_id": "user-1788477817013",
       "assigned_to": "Jefferson",
-      "updated_at": "2026-09-12T20:55:11.967Z"
+      "updated_at": "2026-09-12T20:55:11.970Z"
     },
     "conv-81999999999": {
       "id": "conv-81999999999",

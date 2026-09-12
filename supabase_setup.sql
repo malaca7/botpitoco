@@ -218,6 +218,8 @@ CREATE TABLE IF NOT EXISTS public.flows (
     version INTEGER NOT NULL DEFAULT 1,
     is_active BOOLEAN NOT NULL DEFAULT false,
     trigger_type TEXT DEFAULT 'keyword',
+    keywords TEXT,
+    trigger_keywords TEXT,
     store_id TEXT REFERENCES public.stores(id) ON DELETE SET NULL,
     store_name TEXT,
     node_count INTEGER DEFAULT 0,

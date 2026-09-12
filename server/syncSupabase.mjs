@@ -169,6 +169,8 @@ export async function syncToSupabase(dbOverride) {
           version: f.version || 1,
           is_active: f.is_active ?? true,
           trigger_type: f.trigger_type || 'Qualquer Mensagem Recebida',
+          keywords: f.keywords || '',
+          trigger_keywords: f.trigger_keywords || f.keywords || '',
           store_id: f.store_id || null,
           store_name: f.store_name || null,
           node_count: f.node_count || 0,

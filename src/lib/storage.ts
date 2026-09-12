@@ -1197,6 +1197,8 @@ export const StorageService = {
       version: flow.version ?? existing?.version ?? 1,
       node_count: typeof flow.node_count === 'number' && flow.node_count > 0 ? flow.node_count : (existing?.node_count ?? (flow.steps && flow.steps.length > 0 ? flow.steps.length : 2)),
       trigger_type: flow.trigger_type ?? existing?.trigger_type ?? 'Qualquer Mensagem Recebida',
+      keywords: (flow as any).keywords !== undefined ? (flow as any).keywords : ((existing as any)?.keywords ?? ''),
+      trigger_keywords: (flow as any).trigger_keywords !== undefined ? (flow as any).trigger_keywords : ((existing as any)?.trigger_keywords ?? ''),
       store_id: flow.store_id !== undefined ? flow.store_id : (existing?.store_id ?? null),
       store_name: flow.store_name ?? existing?.store_name ?? (flow.store_id ? 'Filial Específica' : 'Toda a Rede'),
       steps: flow.steps ?? existing?.steps ?? [],

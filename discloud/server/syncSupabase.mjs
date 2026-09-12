@@ -140,6 +140,16 @@ export async function syncToSupabase(dbOverride) {
         }, { onConflict: 'phone' });
         if (error) report.errors.push(`clients: ${error.message}`);
         else report.clients++;
+
+        await supabase.from('contacts').upsert({
+          id: c.id || `contact-${cleanPhone}`,
+          phone: cleanPhone,
+          name: c.name || 'Cliente WhatsApp',
+          status: c.status || 'active',
+          tags: c.tags || ['Cliente WhatsApp'],
+          metadata: c.custom_fields || c.metadata || {},
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'phone' }).catch(() => {});
       } catch (err) {
         report.errors.push(`clients: ${err.message}`);
       }
@@ -159,6 +169,8 @@ export async function syncToSupabase(dbOverride) {
           version: f.version || 1,
           is_active: f.is_active ?? true,
           trigger_type: f.trigger_type || 'Qualquer Mensagem Recebida',
+          keywords: f.keywords || '',
+          trigger_keywords: f.trigger_keywords || f.keywords || '',
           store_id: f.store_id || null,
           store_name: f.store_name || null,
           node_count: f.node_count || 0,
