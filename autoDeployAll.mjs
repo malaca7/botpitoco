@@ -72,12 +72,18 @@ async function main() {
     fs.writeFileSync(path.join(distDir, 'CNAME'), 'pitoco.malaca.com.br\n');
     fs.writeFileSync(path.join(distDir, '.nojekyll'), '');
 
-    // Fallback 404.html
+    // Fallback 404.html com SPA Redirect
+    const public404Path = path.join(__dirname, 'public', '404.html');
     const distHtmlPath = path.join(distDir, 'index.html');
-    if (fs.existsSync(distHtmlPath)) {
-      const distHtml = fs.readFileSync(distHtmlPath, 'utf8');
-      fs.writeFileSync(path.join(distDir, '404.html'), distHtml, 'utf8');
+    const distHtml = fs.existsSync(distHtmlPath) ? fs.readFileSync(distHtmlPath, 'utf8') : '';
 
+    if (fs.existsSync(public404Path)) {
+      fs.copyFileSync(public404Path, path.join(distDir, '404.html'));
+    } else if (distHtml) {
+      fs.writeFileSync(path.join(distDir, '404.html'), distHtml, 'utf8');
+    }
+
+    if (distHtml) {
       // Gerar subdiretórios com index.html apenas dentro de dist/ para rotas limpas no GitHub Pages
       for (const route of SPA_ROUTES) {
         const routeDistDir = path.join(distDir, route);

@@ -70,18 +70,22 @@ export default function AdminPage({ onNavigate, activeTabProp }: AdminPageProps 
     setActiveTab(tab);
     if (onNavigate) {
       const pathMap: Record<string, string> = {
-        dashboard: '/admin',
+        dashboard: '/admin?tab=dashboard',
         lojas: '/lojas',
         produtos: '/catalogo',
         bot_config: '/bot_config',
         atendimento: '/atendimento',
         clientes: '/clientes',
-        agendamentos: '/clientes',
+        agendamentos: '/clientes?tab=agendamentos',
         fluxos: '/fluxos',
         whatsapp: '/whatsapp',
         acessos: '/acessos',
       };
-      if (pathMap[tab]) onNavigate(pathMap[tab]);
+      if (pathMap[tab]) {
+        onNavigate(pathMap[tab]);
+      } else {
+        onNavigate(`/admin?tab=${tab}`);
+      }
     }
   };
 

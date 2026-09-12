@@ -1402,9 +1402,12 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
       } else if (!error && Array.isArray(data)) {
         supabaseHasFlowsTable = true;
         activeFlows = data.filter((f) => f.is_active === true || f.status === 'published');
-        if (activeFlows.length === 0) {
-          console.log('[FlowRunner] ⏸️ Nenhum fluxo ativo no Supabase (status=published ou is_active=true). O bot não executará fluxos inativos.');
-          return { publishedFlow: null, nodes: [], edges: [], isKeywordMatch: false };
+        // Mesclar com fluxos locais ativos
+        const localActives = (db.flows || []).filter((f) => f.status === 'published' || f.is_active === true);
+        for (const lf of localActives) {
+          if (!activeFlows.some(af => af.id === lf.id)) {
+            activeFlows.push(lf);
+          }
         }
       }
     } catch (e) {
@@ -1444,6 +1447,40 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
       if (Array.isArray(nodesRes.data)) allActiveNodes = nodesRes.data;
       if (Array.isArray(edgesRes.data)) allActiveEdges = edgesRes.data;
     } catch (e) {}
+  }
+
+  // Mesclar com nós e arestas locais
+  if (Array.isArray(db.flow_nodes)) {
+    for (const ln of db.flow_nodes) {
+      if (activeFlowIds.includes(ln.flow_id) && !allActiveNodes.some(n => n.id === ln.id)) {
+        allActiveNodes.push(ln);
+      }
+    }
+  }
+  if (Array.isArray(db.flow_edges)) {
+    for (const le of db.flow_edges) {
+      if (activeFlowIds.includes(le.flow_id) && !allActiveEdges.some(e => e.id === le.id)) {
+        allActiveEdges.push(le);
+      }
+    }
+  }
+  if (db.nodes) {
+    for (const [fId, nList] of Object.entries(db.nodes)) {
+      if (activeFlowIds.includes(fId) && Array.isArray(nList)) {
+        for (const ln of nList) {
+          if (!allActiveNodes.some(n => n.id === ln.id)) allActiveNodes.push({ ...ln, flow_id: fId });
+        }
+      }
+    }
+  }
+  if (db.edges) {
+    for (const [fId, eList] of Object.entries(db.edges)) {
+      if (activeFlowIds.includes(fId) && Array.isArray(eList)) {
+        for (const le of eList) {
+          if (!allActiveEdges.some(e => e.id === le.id)) allActiveEdges.push({ ...le, flow_id: fId });
+        }
+      }
+    }
   }
 
   // 4. Selecionar o melhor fluxo para a mensagem recebida:
@@ -3286,30 +3323,107 @@ function parseCustomDateString(input) {
       replies.push(responseText);
     }
 
-    // 7.2 HTTP Request / Webhook Node
+    // 7.2 HTTP Request / Webhook Node (Execução Completa com Variáveis, Headers e Resposta)
     else if (nodeType === 'http_request' || nodeType === 'webhook') {
-      const targetUrl = replaceVars(config.url || config.webhookUrl || '', session.variables, botProfile);
-      if (targetUrl && targetUrl.startsWith('http')) {
+      let rawUrl = config.url || config.webhookUrl || '';
+      if (!rawUrl && config.endpoint) {
+        rawUrl = config.endpoint.startsWith('http') ? config.endpoint : `/api/wh/${config.endpoint.replace(/^\/+/, '')}`;
+      }
+
+      let targetUrl = replaceVars(rawUrl, session.variables, botProfile);
+      if (targetUrl && targetUrl.startsWith('/')) {
+        const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+        targetUrl = `${baseUrl.replace(/\/+$/, '')}${targetUrl}`;
+      }
+
+      if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
         try {
           const method = (config.method || 'POST').toUpperCase();
-          const reqHeaders = { 'Content-Type': 'application/json', ...(config.headers || {}) };
-          const reqBody = (method !== 'GET' && method !== 'HEAD') ? JSON.stringify({
-            phone: cleanPhone,
-            variables: session.variables,
-            input: cleanInput,
-            ...(config.payload || {}),
-          }) : undefined;
+          const reqHeaders = { 'Content-Type': 'application/json' };
 
-          console.log(`[FlowRunner] 🌐 Disparando ${method} para: ${targetUrl}`);
-          const apiResp = await fetch(targetUrl, { method, headers: reqHeaders, body: reqBody });
-          if (apiResp.ok) {
-            const jsonResp = await apiResp.json().catch(() => ({}));
-            if (config.responseVariable && typeof jsonResp === 'object') {
-              session.variables[config.responseVariable] = JSON.stringify(jsonResp);
+          // 1. Processar Headers em lista ou objeto
+          if (Array.isArray(config.headersList)) {
+            for (const h of config.headersList) {
+              if (h && h.key && h.key.trim()) {
+                const k = replaceVars(h.key.trim(), session.variables, botProfile);
+                const v = replaceVars(h.value || '', session.variables, botProfile);
+                reqHeaders[k] = v;
+              }
+            }
+          } else if (config.headers && typeof config.headers === 'object') {
+            for (const [k, v] of Object.entries(config.headers)) {
+              const resK = replaceVars(k, session.variables, botProfile);
+              const resV = replaceVars(String(v), session.variables, botProfile);
+              reqHeaders[resK] = resV;
             }
           }
+
+          // 2. Processar Corpo / Body
+          let reqBody = undefined;
+          if (method !== 'GET' && method !== 'HEAD') {
+            if (config.payloadMode === 'custom' && config.customPayload) {
+              reqBody = replaceVars(config.customPayload, session.variables, botProfile);
+            } else if (config.body) {
+              reqBody = replaceVars(config.body, session.variables, botProfile);
+            } else {
+              // Payload automático completo com dados do cliente e variáveis
+              const contactName = session.variables['nome_cliente'] || session.variables['cliente_nome'] || senderName || 'Cliente';
+              reqBody = JSON.stringify({
+                event: nodeType === 'webhook' ? 'flow_webhook_dispatch' : 'flow_http_request',
+                node_id: currentNode.id,
+                flow_id: session.flowId || null,
+                timestamp: new Date().toISOString(),
+                contact: {
+                  phone: cleanPhone,
+                  name: contactName,
+                },
+                input: cleanInput,
+                variables: session.variables,
+                ...(config.payload || {}),
+              });
+            }
+          }
+
+          console.log(`[FlowRunner] 🌐 Disparando [${nodeType.toUpperCase()}] ${method} -> ${targetUrl}`);
+          
+          const controller = new AbortController();
+          const timeoutMs = (parseInt(config.timeoutSeconds) || 10) * 1000;
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+          const apiResp = await fetch(targetUrl, {
+            method,
+            headers: reqHeaders,
+            body: reqBody,
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          const statusVarKey = (config.statusVar || config.statusVariable || (nodeType === 'webhook' ? 'webhook_status' : 'status_api')).replace(/[{}]/g, '').trim();
+          session.variables[statusVarKey] = apiResp.status;
+
+          const respText = await apiResp.text();
+          const responseVarKey = (config.responseVar || config.responseVariable || (nodeType === 'webhook' ? 'webhook_res' : 'resposta_api')).replace(/[{}]/g, '').trim();
+
+          try {
+            const respJson = JSON.parse(respText);
+            session.variables[responseVarKey] = JSON.stringify(respJson);
+            // Salvar campos de primeiro nível para acesso direto em variáveis
+            if (respJson && typeof respJson === 'object' && !Array.isArray(respJson)) {
+              for (const [jk, jv] of Object.entries(respJson)) {
+                if (typeof jv === 'string' || typeof jv === 'number' || typeof jv === 'boolean') {
+                  session.variables[`${responseVarKey}_${jk}`] = jv;
+                }
+              }
+            }
+          } catch {
+            session.variables[responseVarKey] = respText;
+          }
+
+          console.log(`[FlowRunner] ✅ [${nodeType.toUpperCase()}] Sucesso (${apiResp.status}): salvo em {{${responseVarKey}}}`);
         } catch (apiErr) {
-          console.warn('[FlowRunner] Falha ao disparar HTTP/Webhook:', apiErr.message);
+          const statusVarKey = (config.statusVar || config.statusVariable || (nodeType === 'webhook' ? 'webhook_status' : 'status_api')).replace(/[{}]/g, '').trim();
+          session.variables[statusVarKey] = apiErr.name === 'AbortError' ? 408 : 500;
+          console.warn(`[FlowRunner] ⚠️ [${nodeType.toUpperCase()}] Erro ao requisitar ${targetUrl}:`, apiErr.message);
         }
       }
     }

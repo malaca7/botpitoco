@@ -348,9 +348,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
               {group.items.map(item => {
                 const Icon = item.icon;
+                const baseCurrentPath = currentPath.split('?')[0];
                 const isActive = 
-                  currentPath === item.path || 
-                  (item.path !== '/admin' && currentPath.startsWith(item.path));
+                  baseCurrentPath === item.path || 
+                  (item.path !== '/admin' && baseCurrentPath.startsWith(item.path));
 
                 return (
                   <button

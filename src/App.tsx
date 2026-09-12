@@ -16,11 +16,31 @@ import { ManagerPortalPage } from './pages/manager/ManagerPortalPage';
 
 import { StorageService } from './lib/storage';
 
-const normalizePath = (rawPath: string) => {
-  let clean = rawPath.replace(/^\/pitocodegente\/?/, '/').replace(/^\/7assistente\/?/, '/');
-  if (!clean.startsWith('/')) clean = `/${clean}`;
-  if (clean.length > 1 && clean.endsWith('/')) clean = clean.slice(0, -1);
-  return clean;
+export interface RouteLocation {
+  pathname: string;
+  search: string;
+  searchParams: URLSearchParams;
+  fullPath: string;
+}
+
+export const parseRouteLocation = (rawInput?: string): RouteLocation => {
+  const input = rawInput !== undefined 
+    ? rawInput 
+    : (typeof window !== 'undefined' ? `${window.location.pathname}${window.location.search}` : '/');
+
+  const [pathPart, queryPart] = input.split('?');
+  let cleanPath = (pathPart || '/').replace(/^\/pitocodegente\/?/, '/').replace(/^\/7assistente\/?/, '/');
+  if (!cleanPath.startsWith('/')) cleanPath = `/${cleanPath}`;
+  if (cleanPath.length > 1 && cleanPath.endsWith('/')) cleanPath = cleanPath.slice(0, -1);
+  const search = queryPart ? `?${queryPart}` : '';
+  const searchParams = new URLSearchParams(queryPart || '');
+
+  return {
+    pathname: cleanPath,
+    search,
+    searchParams,
+    fullPath: `${cleanPath}${search}`
+  };
 };
 
 export const App: React.FC = () => {
@@ -35,24 +55,24 @@ export const App: React.FC = () => {
     hasAttendantAccess 
   } = useAuth();
 
-  const [currentPath, setCurrentPath] = useState<string>(() => {
-    return normalizePath(window.location.pathname || '/');
-  });
+  const [route, setRoute] = useState<RouteLocation>(() => parseRouteLocation());
 
   useEffect(() => {
     StorageService.syncAllFromBackend().catch(() => {});
     const handlePopState = () => {
-      setCurrentPath(normalizePath(window.location.pathname || '/'));
+      setRoute(parseRouteLocation());
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navigate = (path: string) => {
-    const clean = normalizePath(path);
-    window.history.pushState({}, '', clean);
-    setCurrentPath(clean);
+  const navigate = (pathWithSearch: string) => {
+    const nextRoute = parseRouteLocation(pathWithSearch);
+    window.history.pushState({}, '', nextRoute.fullPath);
+    setRoute(nextRoute);
   };
+
+  const { pathname, searchParams, fullPath } = route;
 
   if (isLoading) {
     return (
@@ -66,17 +86,17 @@ export const App: React.FC = () => {
   }
 
   // 1. Redirecionamento oficial: /ceo -> /admin
-  if (currentPath === '/ceo') {
+  if (pathname === '/ceo') {
     navigate('/admin');
   }
 
   // 2. Vitrine Pública (Root /, /enxoval, /medidas, /fila) - apenas quando não autenticado em admin
-  if (currentPath === '/' || currentPath === '/enxoval' || currentPath === '/medidas' || currentPath === '/fila') {
+  if (pathname === '/' || pathname === '/enxoval' || pathname === '/medidas' || pathname === '/fila') {
     return <StorefrontPage />;
   }
 
   // 3. Login direto
-  if (currentPath === '/login') {
+  if (pathname === '/login') {
     if (isAuthenticated) {
       const defaultTarget = hasAdminAccess ? '/admin' : hasManagerAccess ? '/gerente' : '/atendimento';
       navigate(defaultTarget);
@@ -94,7 +114,7 @@ export const App: React.FC = () => {
   // Se o usuário tem apenas acesso a atendimento e tenta acessar rotas administrativas/gestão
   if (!hasAdminAccess && !hasManagerAccess && hasAttendantAccess) {
     const allowedAttendantPaths = ['/atendimento', '/conversas', '/catalogo', '/produtos', '/clientes', '/crm'];
-    if (!allowedAttendantPaths.includes(currentPath)) {
+    if (!allowedAttendantPaths.includes(pathname)) {
       navigate('/atendimento');
       return null;
     }
@@ -103,7 +123,7 @@ export const App: React.FC = () => {
   // Se o usuário tem apenas acesso à gerência e tenta acessar rotas restritas de admin master
   if (!hasAdminAccess && hasManagerAccess) {
     const forbiddenForManager = ['/admin', '/bot_config', '/robo', '/fluxos', '/acessos', '/usuarios', '/configuracoes', '/logs'];
-    if (forbiddenForManager.includes(currentPath)) {
+    if (forbiddenForManager.includes(pathname)) {
       navigate('/gerente');
       return null;
     }
@@ -114,27 +134,28 @@ export const App: React.FC = () => {
   let subtitle = 'Gestão centralizada da rede Pitoco de Gente';
   let pageContent = <AdminPage onNavigate={navigate} activeTabProp="dashboard" />;
 
-  if (currentPath === '/admin' || currentPath === '/dashboard') {
+  if (pathname === '/admin' || pathname === '/dashboard') {
+    const tabParam = (searchParams.get('tab') || 'dashboard') as any;
     title = isCEO ? 'Painel Executivo CEO' : 'Painel Administrador Geral';
     subtitle = isCEO ? 'Métricas consolidadas da rede, robô e faturamento' : 'Controle global de módulos, produtos e atendimentos';
-    pageContent = <AdminPage onNavigate={navigate} activeTabProp="dashboard" />;
-  } else if (currentPath === '/gerente' || currentPath === '/gestao') {
+    pageContent = <AdminPage onNavigate={navigate} activeTabProp={tabParam} />;
+  } else if (pathname === '/gerente' || pathname === '/gestao') {
     title = 'Painel de Gestão da Filial';
     subtitle = 'Supervisão executiva, vendas da loja e fila de atendimento';
     pageContent = <ManagerPortalPage onNavigate={navigate} />;
-  } else if (currentPath === '/catalogo' || currentPath === '/produtos') {
+  } else if (pathname === '/catalogo' || pathname === '/produtos') {
     title = 'Catálogo de Produtos';
     subtitle = 'Gerenciamento completo de peças, tamanhos e preços';
     pageContent = <AdminPage onNavigate={navigate} activeTabProp="produtos" />;
-  } else if (currentPath === '/bot_config' || currentPath === '/robo') {
+  } else if (pathname === '/bot_config' || pathname === '/robo') {
     title = 'Bot';
     subtitle = 'Chave PIX, fretes e mensagens automáticas do WhatsApp';
     pageContent = <AdminPage onNavigate={navigate} activeTabProp="bot_config" />;
-  } else if (currentPath === '/clientes' || currentPath === '/crm' || currentPath === '/agendamentos' || currentPath === '/consultorias') {
+  } else if (pathname === '/clientes' || pathname === '/crm' || pathname === '/agendamentos' || pathname === '/consultorias') {
     title = 'Gestão de Clientes';
     subtitle = 'Cadastro, histórico, tags e gerenciamento de contatos da rede';
     pageContent = <ClientsPage onNavigate={navigate} />;
-  } else if (currentPath === '/atendimento' || currentPath === '/conversas') {
+  } else if (pathname === '/atendimento' || pathname === '/conversas') {
     title = 'Central de Atendimentos';
     subtitle = 'Atendimento em tempo real com direcionamento por loja e envio de catálogo';
     pageContent = (
@@ -143,27 +164,27 @@ export const App: React.FC = () => {
         onNavigate={navigate} 
       />
     );
-  } else if (currentPath === '/lojas' || currentPath === '/rede') {
+  } else if (pathname === '/lojas' || pathname === '/rede') {
     title = 'Central de Lojas';
     subtitle = 'Gestão centralizada das unidades Centro, Ipojuca e E-commerce';
     pageContent = <RedeLojasView onNavigate={navigate} />;
-  } else if (currentPath.startsWith('/fluxos')) {
+  } else if (pathname.startsWith('/fluxos')) {
     title = 'Fluxos';
     subtitle = 'Árvores de automação e nós de atendimento no WhatsApp';
     pageContent = <FlowBuilderView onNavigate={navigate} />;
-  } else if (currentPath === '/whatsapp' || currentPath === '/qrcode') {
+  } else if (pathname === '/whatsapp' || pathname === '/qrcode') {
     title = 'Conexão WhatsApp Meta Cloud API';
     subtitle = 'Integração Oficial com a Meta WhatsApp Business Platform e Webhooks';
     pageContent = <WhatsappConnectView />;
-  } else if (currentPath === '/acessos' || currentPath === '/usuarios') {
+  } else if (pathname === '/acessos' || pathname === '/usuarios') {
     title = 'Gestão de Acessos';
     subtitle = 'Controle de painéis autorizados: Admin, Gerente e Atendimento';
     pageContent = <UsersPage />;
-  } else if (currentPath === '/logs') {
+  } else if (pathname === '/logs') {
     title = 'Logs & Auditoria';
     subtitle = 'Histórico de eventos, transbordos e mensagens do sistema';
     pageContent = <LogsPage />;
-  } else if (currentPath === '/configuracoes') {
+  } else if (pathname === '/configuracoes') {
     title = 'Configurações';
     subtitle = 'Perfil da empresa, status de sincronização e credenciais';
     pageContent = <SettingsPage />;
@@ -173,7 +194,7 @@ export const App: React.FC = () => {
     <AdminLayout
       title={title}
       subtitle={subtitle}
-      currentPath={currentPath}
+      currentPath={fullPath}
       onNavigate={navigate}
     >
       {pageContent}

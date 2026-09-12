@@ -115,7 +115,11 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [contactInfo, setContactInfo] = useState<Contact | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const initialFilterFromUrl = queryParams?.get('filter') || queryParams?.get('status') || 'all';
+  const [statusFilter, setStatusFilter] = useState<string>(initialFilterFromUrl);
+
   const [sortOrder, setSortOrder] = useState<'oldest_first' | 'newest_first'>('oldest_first');
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -201,8 +205,10 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
       const data = await StorageService.getConversations(filter);
       setConversations(data);
       if (!activeConv && data.length > 0) {
-        // Encontrar a primeira conversa válida (não deletada por padrão)
-        const firstValid = data.find(c => !c.is_deleted) || data[0];
+        const qp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const targetConvId = qp?.get('convId') || qp?.get('id');
+        const matched = targetConvId ? data.find(c => c.id === targetConvId || c.phone === targetConvId || `conv-${c.phone}` === targetConvId) : null;
+        const firstValid = matched || data.find(c => !c.is_deleted) || data[0];
         setActiveConv(firstValid);
       }
     } catch (err) {
@@ -211,6 +217,23 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
       if (!silent) setIsLoading(false);
     }
   }, [selectedStoreFilter, activeConv]);
+
+  const handleSelectConv = (conv: Conversation) => {
+    setActiveConv(conv);
+    if (typeof window !== 'undefined') {
+      const url = `/atendimento?convId=${encodeURIComponent(conv.id)}${statusFilter !== 'all' ? `&filter=${encodeURIComponent(statusFilter)}` : ''}`;
+      window.history.replaceState({}, '', url);
+    }
+  };
+
+  const handleStatusFilterChange = (newFilter: string) => {
+    setStatusFilter(newFilter);
+    if (typeof window !== 'undefined') {
+      const convParam = activeConv ? `convId=${encodeURIComponent(activeConv.id)}&` : '';
+      const url = `/atendimento?${convParam}filter=${encodeURIComponent(newFilter)}`;
+      window.history.replaceState({}, '', url);
+    }
+  };
 
   useEffect(() => {
     fetchConversations(false);
@@ -976,7 +999,7 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
               ].map(st => (
                 <button
                   key={st.id}
-                  onClick={() => setStatusFilter(st.id)}
+                  onClick={() => handleStatusFilterChange(st.id)}
                   className={`px-2.5 py-1 text-[11px] font-medium rounded-lg shrink-0 transition-all ${
                     statusFilter === st.id
                       ? st.id === 'trash'
@@ -1047,7 +1070,7 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
                 return (
                   <div
                     key={conv.id}
-                    onClick={() => setActiveConv(conv)}
+                    onClick={() => handleSelectConv(conv)}
                     className={`p-2.5 rounded-xl cursor-pointer transition-all relative ${
                       isActive 
                         ? 'bg-white/10 text-white shadow-sm ring-1 ring-white/20' 

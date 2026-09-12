@@ -107,29 +107,48 @@ export const DelayNode: React.FC<NodeProps> = ({ id, selected, data }) => {
 export const HttpRequestNode: React.FC<NodeProps> = ({ id, selected, data }) => {
   const nodeData = data as unknown as FlowNodeData;
   const config = nodeData.config || {};
+  const method = (config.method || 'POST').toUpperCase();
+  const methodColors: Record<string, string> = {
+    GET: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    POST: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+    PUT: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    PATCH: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    DELETE: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+  };
 
   return (
     <BaseNode
       id={id}
       selected={selected}
       title={nodeData.label || 'Requisição HTTP / API'}
-      subtitle="Integração externa"
+      subtitle="Integração externa REST"
       icon={<Globe className="w-4 h-4" />}
-      iconBg="bg-zinc-800 border border-zinc-700"
-      accentColor="bg-zinc-500"
+      iconBg="bg-sky-500/20 text-sky-400 border border-sky-500/40"
+      accentColor="bg-sky-500"
       hasInput={true}
       hasOutput={true}
       isConfigured={Boolean(config.url)}
     >
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <div className="flex items-center gap-2">
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 text-zinc-200 border border-zinc-700">
-            {config.method || 'POST'}
+          <span className={cn(
+            "px-1.5 py-0.5 rounded text-[10px] font-bold border font-mono",
+            methodColors[method] || 'bg-zinc-800 text-zinc-300 border-zinc-700'
+          )}>
+            {method}
           </span>
-          <span className="text-[11px] text-slate-400 truncate flex-1 font-mono">
+          <span className="text-[11px] text-slate-300 truncate flex-1 font-mono" title={config.url || 'https://api.exemplo.com/v1'}>
             {config.url || 'https://api.exemplo.com/v1'}
           </span>
         </div>
+        {config.responseVar && (
+          <div className="text-[9.5px] text-slate-400 flex items-center gap-1 font-mono">
+            <span className="text-sky-400">Salva:</span>
+            <span className="px-1.5 py-0.2 bg-dark-900 rounded border border-white/10 text-sky-300">
+              {`{{${config.responseVar}}}`}
+            </span>
+          </div>
+        )}
       </div>
     </BaseNode>
   );
@@ -138,22 +157,37 @@ export const HttpRequestNode: React.FC<NodeProps> = ({ id, selected, data }) => 
 export const WebhookNode: React.FC<NodeProps> = ({ id, selected, data }) => {
   const nodeData = data as unknown as FlowNodeData;
   const config = nodeData.config || {};
+  const isEndpoint = config.webhookMode === 'endpoint';
+  const displayUrl = isEndpoint 
+    ? `/api/wh/${config.endpoint || 'novo-evento'}` 
+    : (config.url || config.webhookUrl || 'https://webhook.site/...');
+  const isConfigured = Boolean(config.url || config.webhookUrl || config.endpoint);
 
   return (
     <BaseNode
       id={id}
       selected={selected}
       title={nodeData.label || 'Disparo Webhook'}
-      subtitle="Gatilho ou Notificação"
+      subtitle={isEndpoint ? 'Endpoint Interno' : 'Disparo Outbound'}
       icon={<Webhook className="w-4 h-4" />}
-      iconBg="bg-teal-500"
+      iconBg="bg-teal-500/20 text-teal-400 border border-teal-500/40"
       accentColor="bg-teal-500"
       hasInput={true}
       hasOutput={true}
-      isConfigured={true}
+      isConfigured={isConfigured}
     >
-      <div className="p-2 rounded-lg bg-dark-950/70 border border-slate-800 text-[11px] text-slate-300 truncate font-mono">
-        {config.endpoint ? `/api/wh/${config.endpoint}` : 'Mapeamento de payload ativo'}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40 font-mono">
+            POST
+          </span>
+          <span className="text-[10px] text-slate-400">
+            {config.payloadMode === 'custom' ? 'JSON Custom' : 'Payload Completo'}
+          </span>
+        </div>
+        <div className="p-1.5 rounded-lg bg-dark-950/80 border border-teal-500/20 text-[10.5px] text-teal-200 truncate font-mono" title={displayUrl}>
+          {displayUrl}
+        </div>
       </div>
     </BaseNode>
   );

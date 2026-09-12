@@ -54,14 +54,33 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
   const [agendaSettings, setAgendaSettings] = useState<AgendaSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const initialClientIdFromUrl = queryParams?.get('clientId') || queryParams?.get('id') || '';
+  const initialViewMode = (queryParams?.get('view') === 'table' ? 'table' : 'cards') as 'cards' | 'table';
+  const initialSearch = queryParams?.get('busca') || queryParams?.get('q') || '';
+
   // Filters & Views
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [filterAppointmentStatus, setFilterAppointmentStatus] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>(initialViewMode);
 
   // Modals & Drawers
   const [selectedClientForDrawer, setSelectedClientForDrawer] = useState<Contact | null>(null);
+
+  const handleOpenDrawer = (client: Contact) => {
+    setSelectedClientForDrawer(client);
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', `/clientes?clientId=${encodeURIComponent(client.id)}`);
+    }
+  };
+
+  const handleCloseDrawer = () => {
+    setSelectedClientForDrawer(null);
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', '/clientes');
+    }
+  };
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Contact | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Contact | null>(null);
@@ -146,13 +165,16 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
     };
   }, []);
 
-  // Update selected client in drawer if clients state changes
+  // Update selected client in drawer if clients state changes or from URL
   useEffect(() => {
     if (selectedClientForDrawer) {
       const fresh = clients.find(c => c.id === selectedClientForDrawer.id || c.phone === selectedClientForDrawer.phone);
       if (fresh) setSelectedClientForDrawer(fresh);
+    } else if (initialClientIdFromUrl && clients.length > 0) {
+      const matched = clients.find(c => c.id === initialClientIdFromUrl || c.phone === initialClientIdFromUrl);
+      if (matched) setSelectedClientForDrawer(matched);
     }
-  }, [clients]);
+  }, [clients, initialClientIdFromUrl]);
 
   // Phone match helper
   const isMatchingPhone = (phoneA?: string, phoneB?: string) => {
@@ -775,7 +797,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setSelectedClientForDrawer(client)}
+                    onClick={() => handleOpenDrawer(client)}
                     className="text-xs flex-1 border-white/10 hover:border-brand-500/40"
                   >
                     Ver Dossiê
@@ -871,7 +893,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setSelectedClientForDrawer(client)}
+                            onClick={() => handleOpenDrawer(client)}
                             className="text-xs h-8 px-2.5"
                           >
                             Dossiê
@@ -906,7 +928,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
       {selectedClientForDrawer && (
         <div 
           className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={() => setSelectedClientForDrawer(null)}
+          onClick={() => handleCloseDrawer()}
         >
           <div 
             className="w-full max-w-xl bg-dark-950 border-l border-white/10 h-full overflow-y-auto p-6 space-y-6 shadow-2xl flex flex-col justify-between"
@@ -930,7 +952,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
                 </div>
 
                 <button
-                  onClick={() => setSelectedClientForDrawer(null)}
+                  onClick={() => handleCloseDrawer()}
                   className="p-2 rounded-xl bg-dark-900 text-slate-400 hover:text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -1094,7 +1116,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
                 size="sm"
                 onClick={() => {
                   handleOpenEditClient(selectedClientForDrawer);
-                  setSelectedClientForDrawer(null);
+                  handleCloseDrawer();
                 }}
                 leftIcon={<Edit2 className="w-3.5 h-3.5" />}
               >
@@ -1103,7 +1125,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
               <Button
                 variant="brand"
                 size="sm"
-                onClick={() => setSelectedClientForDrawer(null)}
+                onClick={() => handleCloseDrawer()}
               >
                 Fechar Dossiê
               </Button>

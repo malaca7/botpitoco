@@ -795,6 +795,79 @@ export const FlowSimulator: React.FC<FlowSimulatorProps> = ({
         ]);
         break;
       }
+      // 14.1 HTTP Request Node
+      else if (type === 'http_request') {
+        const method = (config.method || 'POST').toUpperCase();
+        const targetUrl = substituteVariables(config.url || 'https://api.exemplo.com/v1', activeVars, p || undefined);
+        const responseVar = (config.responseVar || config.responseVariable || 'resposta_api').replace(/[{}]/g, '').trim();
+        const statusVar = (config.statusVar || config.statusVariable || 'status_api').replace(/[{}]/g, '').trim();
+        
+        const sampleResponse = {
+          status: 'success',
+          code: 200,
+          message: 'Requisição processada com sucesso no simulador',
+          url: targetUrl,
+          data: {
+            cliente: activeVars.nome_cliente || 'Cliente',
+            telefone: activeVars.telefone_cliente || '81999998888',
+          }
+        };
+
+        activeVars[responseVar] = JSON.stringify(sampleResponse);
+        activeVars[statusVar] = 200;
+        setVariables({ ...activeVars });
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}-${Math.random()}`,
+            sender: 'system',
+            content: `🌐 *[Requisição HTTP / API]* ${method} ${targetUrl} → Retorno salvo em *{{${responseVar}}}* (HTTP 200)`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            nodeId: nextNode.id,
+          },
+        ]);
+
+        const outgoing = edges.find(e => e.source === nextNode.id);
+        if (outgoing) {
+          currentId = outgoing.target;
+          isFirstStep = true;
+          continue;
+        }
+        break;
+      }
+      // 14.2 Webhook Dispatch Node
+      else if (type === 'webhook') {
+        const isEndpoint = config.webhookMode === 'endpoint';
+        const targetUrl = isEndpoint 
+          ? `/api/wh/${config.endpoint || 'novo-evento'}`
+          : substituteVariables(config.url || config.webhookUrl || 'https://webhook.site/evento', activeVars, p || undefined);
+        const responseVar = (config.responseVar || config.responseVariable || 'webhook_res').replace(/[{}]/g, '').trim();
+        const statusVar = (config.statusVar || 'webhook_status').replace(/[{}]/g, '').trim();
+
+        activeVars[responseVar] = JSON.stringify({ ok: true, event: 'webhook_received', timestamp: new Date().toISOString() });
+        activeVars[statusVar] = 200;
+        setVariables({ ...activeVars });
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}-${Math.random()}`,
+            sender: 'system',
+            content: `⚡ *[Disparo Webhook]* POST ${targetUrl} → Payload enviado e salvo em *{{${responseVar}}}* (OK)`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            nodeId: nextNode.id,
+          },
+        ]);
+
+        const outgoing = edges.find(e => e.source === nextNode.id);
+        if (outgoing) {
+          currentId = outgoing.target;
+          isFirstStep = true;
+          continue;
+        }
+        break;
+      }
       // 15. End Flow Node
       else if (type === 'end_flow' || type === 'finish_flow' || type === 'end') {
         const finalMsg = config.message

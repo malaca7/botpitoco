@@ -41,7 +41,10 @@ import {
   Phone,
   MessageSquare,
   Send,
-  GitBranch
+  GitBranch,
+  Globe,
+  Webhook,
+  Code2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { VariableBadge } from './ui/VariableBadge';
@@ -349,7 +352,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         />
 
         {/* Modo de Envio no WhatsApp: Responder/Citar vs Apenas Enviar */}
-        {nodeType !== 'trigger' && (
+        {['message', 'buttons', 'question', 'media', 'show_catalog', 'select_product', 'shipping_calculator', 'pix_payment', 'cart_order', 'measure_guide', 'layette_checklist', 'vip_consultation', 'order_tracking', 'promotional_coupon', 'end_flow'].includes(nodeType) && (
           <div className="p-3.5 rounded-2xl bg-dark-950/80 border border-white/10 space-y-2.5 shadow-sm">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
@@ -2624,6 +2627,422 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               onChange={(e) => handleConfigChange('minOrderValue', parseFloat(e.target.value) || 0)}
               placeholder="0 para qualquer valor"
             />
+          </div>
+        )}
+
+        {/* 26. HTTP Request / API Integration Node */}
+        {nodeType === 'http_request' && (
+          <div className="space-y-4">
+            <div className="p-3 rounded-2xl bg-sky-950/40 border border-sky-500/30 text-xs text-sky-200 space-y-1">
+              <span className="font-bold flex items-center gap-1.5 text-sky-300">
+                <Globe className="w-4 h-4" />
+                Requisição HTTP / API Externa
+              </span>
+              <p className="text-[11px] text-slate-300 leading-snug">
+                Realiza chamadas REST para integrar com CRMs, APIs de estoque, ERPs, sistemas legados ou endpoints externos.
+              </p>
+            </div>
+
+            {/* Método HTTP */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-200">Método HTTP</label>
+              <div className="grid grid-cols-5 gap-1 p-1 bg-dark-950/80 border border-white/10 rounded-xl">
+                {(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const).map((m) => {
+                  const isSel = (config.method || 'POST').toUpperCase() === m;
+                  const colorClass = 
+                    m === 'GET' ? (isSel ? 'bg-emerald-600 text-white font-bold shadow' : 'text-emerald-400 hover:bg-white/5') :
+                    m === 'POST' ? (isSel ? 'bg-sky-600 text-white font-bold shadow' : 'text-sky-400 hover:bg-white/5') :
+                    m === 'PUT' ? (isSel ? 'bg-amber-600 text-white font-bold shadow' : 'text-amber-400 hover:bg-white/5') :
+                    m === 'PATCH' ? (isSel ? 'bg-purple-600 text-white font-bold shadow' : 'text-purple-400 hover:bg-white/5') :
+                    (isSel ? 'bg-rose-600 text-white font-bold shadow' : 'text-rose-400 hover:bg-white/5');
+
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => handleConfigChange('method', m)}
+                      className={cn("py-1.5 rounded-lg text-[11px] font-mono transition-all text-center", colorClass)}
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* URL / Endpoint */}
+            <div className="space-y-1.5">
+              <Input
+                label="URL / Endpoint da API"
+                value={config.url || ''}
+                onChange={(e) => handleConfigChange('url', e.target.value)}
+                placeholder="https://api.exemplo.com/v1/pedidos/{{numero_pedido}}"
+              />
+              {/* Variáveis rápidas para URL */}
+              <div className="p-2 rounded-xl bg-dark-950/60 border border-white/5 text-[10.5px] space-y-1">
+                <span className="text-slate-400 text-[10px] block">Variáveis no Endpoint:</span>
+                <div className="flex flex-wrap gap-1">
+                  {['{{telefone}}', '{{nome}}', '{{numero_pedido}}', '{{loja_escolhida}}', '{{valor_total}}'].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => handleConfigChange('url', `${config.url || ''}${config.url ? '' : 'https://api.exemplo.com/'}${v}`)}
+                      className="px-1.5 py-0.5 rounded bg-dark-850 hover:bg-sky-950 text-sky-300 border border-white/10 text-[10px] font-mono"
+                    >
+                      + {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Headers Customizados */}
+            <div className="space-y-2 p-3 rounded-2xl bg-dark-950/80 border border-white/10">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Code2 className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Cabeçalhos (Headers)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentHeaders = Array.isArray(config.headersList) ? config.headersList : [{ key: 'Content-Type', value: 'application/json' }];
+                    handleConfigChange('headersList', [...currentHeaders, { key: '', value: '' }]);
+                  }}
+                  className="text-[10px] text-sky-400 hover:text-sky-300 font-semibold flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Adicionar
+                </button>
+              </div>
+
+              <div className="space-y-1.5">
+                {(Array.isArray(config.headersList) && config.headersList.length > 0 ? config.headersList : [
+                  { key: 'Content-Type', value: 'application/json' },
+                ]).map((h: { key: string; value: string }, idx: number) => {
+                  const headersList = Array.isArray(config.headersList) ? [...config.headersList] : [{ key: 'Content-Type', value: 'application/json' }];
+                  return (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Chave (Ex: Authorization)"
+                        value={h.key}
+                        onChange={(e) => {
+                          headersList[idx] = { ...headersList[idx], key: e.target.value };
+                          handleConfigChange('headersList', headersList);
+                        }}
+                        className="w-1/2 bg-dark-900 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-slate-200 font-mono focus:border-sky-500 focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Valor (Ex: Bearer token)"
+                        value={h.value}
+                        onChange={(e) => {
+                          headersList[idx] = { ...headersList[idx], value: e.target.value };
+                          handleConfigChange('headersList', headersList);
+                        }}
+                        className="w-1/2 bg-dark-900 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-slate-200 font-mono focus:border-sky-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = headersList.filter((_, i) => i !== idx);
+                          handleConfigChange('headersList', updated);
+                        }}
+                        className="p-1 text-slate-500 hover:text-rose-400"
+                        title="Remover Header"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Corpo / Body (visível para POST, PUT, PATCH) */}
+            {['POST', 'PUT', 'PATCH'].includes((config.method || 'POST').toUpperCase()) && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-200">Corpo da Requisição (Body JSON)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sample = JSON.stringify({
+                        telefone: "{{telefone}}",
+                        nome: "{{nome_cliente}}",
+                        evento: "compra_iniciada",
+                        data: "{{hoje}}"
+                      }, null, 2);
+                      handleConfigChange('body', sample);
+                    }}
+                    className="text-[10px] text-sky-400 hover:underline"
+                  >
+                    Exemplo JSON
+                  </button>
+                </div>
+                <Textarea
+                  value={config.body || ''}
+                  onChange={(e) => handleConfigChange('body', e.target.value)}
+                  placeholder={'{\n  "cliente": "{{nome_cliente}}",\n  "telefone": "{{telefone}}",\n  "total": "{{valor_total}}"\n}'}
+                  rows={4}
+                  className="font-mono text-xs"
+                />
+              </div>
+            )}
+
+            {/* Variáveis de Resposta e Status */}
+            <div className="p-3 rounded-2xl bg-dark-950/80 border border-white/10 space-y-3">
+              <span className="text-xs font-semibold text-slate-200 block">Captura de Resposta</span>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  label="Salvar Resposta em"
+                  value={config.responseVar || config.responseVariable || 'resposta_api'}
+                  onChange={(e) => {
+                    handleConfigChange('responseVar', e.target.value);
+                    handleConfigChange('responseVariable', e.target.value);
+                  }}
+                  placeholder="resposta_api"
+                  hint="Variável para o JSON/Texto"
+                />
+                <Input
+                  label="Salvar Status HTTP em"
+                  value={config.statusVar || config.statusVariable || 'status_api'}
+                  onChange={(e) => {
+                    handleConfigChange('statusVar', e.target.value);
+                    handleConfigChange('statusVariable', e.target.value);
+                  }}
+                  placeholder="status_api"
+                  hint="Código HTTP (ex: 200)"
+                />
+              </div>
+
+              <div className="pt-1">
+                <Input
+                  label="Timeout (segundos)"
+                  type="number"
+                  value={config.timeoutSeconds ?? 10}
+                  onChange={(e) => handleConfigChange('timeoutSeconds', parseInt(e.target.value) || 10)}
+                  placeholder="10"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 27. Webhook Dispatch Node */}
+        {nodeType === 'webhook' && (
+          <div className="space-y-4">
+            <div className="p-3 rounded-2xl bg-teal-950/40 border border-teal-500/30 text-xs text-teal-200 space-y-1">
+              <span className="font-bold flex items-center gap-1.5 text-teal-300">
+                <Webhook className="w-4 h-4" />
+                Disparo Webhook / Notificação Externa
+              </span>
+              <p className="text-[11px] text-slate-300 leading-snug">
+                Envia notificações em tempo real com dados do lead e variáveis do fluxo para sistemas externos, Make, n8n, Zapier ou seu CRM.
+              </p>
+            </div>
+
+            {/* Tipo de Destino: URL Externa vs Endpoint Interno */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-200">Destino do Webhook</label>
+              <div className="grid grid-cols-2 p-1 bg-dark-950/80 border border-white/10 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleConfigChange('webhookMode', 'outbound')}
+                  className={cn(
+                    "py-2 px-2.5 rounded-lg text-xs font-medium transition-all text-center",
+                    (config.webhookMode || 'outbound') === 'outbound'
+                      ? "bg-teal-500 text-dark-950 font-bold shadow-sm"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  )}
+                >
+                  🌐 URL Externa (Webhook)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfigChange('webhookMode', 'endpoint')}
+                  className={cn(
+                    "py-2 px-2.5 rounded-lg text-xs font-medium transition-all text-center",
+                    config.webhookMode === 'endpoint'
+                      ? "bg-teal-500 text-dark-950 font-bold shadow-sm"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  )}
+                >
+                  ⚡ Endpoint Interno
+                </button>
+              </div>
+            </div>
+
+            {(config.webhookMode || 'outbound') === 'outbound' ? (
+              <div className="space-y-2">
+                <Input
+                  label="URL do Webhook Externo (POST)"
+                  value={config.url || config.webhookUrl || ''}
+                  onChange={(e) => {
+                    handleConfigChange('url', e.target.value);
+                    handleConfigChange('webhookUrl', e.target.value);
+                  }}
+                  placeholder="https://webhook.site/... ou https://meu-crm.com/api/webhook"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {['{{telefone}}', '{{nome_cliente}}', '{{etapa_funil}}', '{{loja_escolhida}}'].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => {
+                        const cur = config.url || config.webhookUrl || '';
+                        handleConfigChange('url', `${cur}${v}`);
+                        handleConfigChange('webhookUrl', `${cur}${v}`);
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-dark-850 hover:bg-teal-950 text-teal-300 border border-white/10 text-[10px] font-mono"
+                    >
+                      + {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  label="Slug do Endpoint Interno"
+                  value={config.endpoint || ''}
+                  onChange={(e) => handleConfigChange('endpoint', e.target.value)}
+                  placeholder="Ex: agendamento-novo"
+                  hint="Ficará acessível como /api/wh/seu-slug"
+                />
+              </div>
+            )}
+
+            {/* Formato do Payload */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-200">Conteúdo do Payload (Dados Enviados)</label>
+              <div className="grid grid-cols-2 p-1 bg-dark-950/80 border border-white/10 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleConfigChange('payloadMode', 'auto')}
+                  className={cn(
+                    "py-2 px-2 rounded-lg text-[11px] font-medium transition-all text-center",
+                    (config.payloadMode || 'auto') === 'auto'
+                      ? "bg-teal-500 text-dark-950 font-bold shadow-sm"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  )}
+                >
+                  🚀 Automático (Tudo)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfigChange('payloadMode', 'custom')}
+                  className={cn(
+                    "py-2 px-2 rounded-lg text-[11px] font-medium transition-all text-center",
+                    config.payloadMode === 'custom'
+                      ? "bg-teal-500 text-dark-950 font-bold shadow-sm"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  )}
+                >
+                  ✍️ JSON Customizado
+                </button>
+              </div>
+              <p className="text-[10.5px] text-slate-400 leading-tight">
+                {(config.payloadMode || 'auto') === 'auto'
+                  ? '⚡ Envia automaticamente objeto JSON com telefone, nome, ID do fluxo e todas as variáveis registradas na sessão.'
+                  : '✍️ Permite você definir exatamente a estrutura do JSON a ser disparado.'}
+              </p>
+            </div>
+
+            {config.payloadMode === 'custom' && (
+              <div className="space-y-1.5">
+                <Textarea
+                  label="JSON do Payload Customizado"
+                  value={config.customPayload || ''}
+                  onChange={(e) => handleConfigChange('customPayload', e.target.value)}
+                  placeholder={'{\n  "lead": "{{nome_cliente}}",\n  "whatsapp": "{{telefone}}",\n  "evento": "novo_contato"\n}'}
+                  rows={4}
+                  className="font-mono text-xs"
+                />
+              </div>
+            )}
+
+            {/* Headers Customizados do Webhook */}
+            <div className="space-y-2 p-3 rounded-2xl bg-dark-950/80 border border-white/10">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Code2 className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Cabeçalhos / Token de Autenticação</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentHeaders = Array.isArray(config.headersList) ? config.headersList : [{ key: 'Content-Type', value: 'application/json' }];
+                    handleConfigChange('headersList', [...currentHeaders, { key: '', value: '' }]);
+                  }}
+                  className="text-[10px] text-teal-400 hover:text-teal-300 font-semibold flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Adicionar
+                </button>
+              </div>
+
+              <div className="space-y-1.5">
+                {(Array.isArray(config.headersList) && config.headersList.length > 0 ? config.headersList : [
+                  { key: 'Content-Type', value: 'application/json' },
+                ]).map((h: { key: string; value: string }, idx: number) => {
+                  const headersList = Array.isArray(config.headersList) ? [...config.headersList] : [{ key: 'Content-Type', value: 'application/json' }];
+                  return (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Chave (Ex: Authorization)"
+                        value={h.key}
+                        onChange={(e) => {
+                          headersList[idx] = { ...headersList[idx], key: e.target.value };
+                          handleConfigChange('headersList', headersList);
+                        }}
+                        className="w-1/2 bg-dark-900 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-slate-200 font-mono focus:border-teal-500 focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Valor (Ex: Bearer token)"
+                        value={h.value}
+                        onChange={(e) => {
+                          headersList[idx] = { ...headersList[idx], value: e.target.value };
+                          handleConfigChange('headersList', headersList);
+                        }}
+                        className="w-1/2 bg-dark-900 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-slate-200 font-mono focus:border-teal-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = headersList.filter((_, i) => i !== idx);
+                          handleConfigChange('headersList', updated);
+                        }}
+                        className="p-1 text-slate-500 hover:text-rose-400"
+                        title="Remover Header"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Variáveis de Resposta */}
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="Gravar Resposta em"
+                value={config.responseVar || config.responseVariable || 'webhook_res'}
+                onChange={(e) => {
+                  handleConfigChange('responseVar', e.target.value);
+                  handleConfigChange('responseVariable', e.target.value);
+                }}
+                placeholder="webhook_res"
+              />
+              <Input
+                label="Gravar Status em"
+                value={config.statusVar || 'webhook_status'}
+                onChange={(e) => handleConfigChange('statusVar', e.target.value)}
+                placeholder="webhook_status"
+              />
+            </div>
           </div>
         )}
       </div>

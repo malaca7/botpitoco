@@ -62,8 +62,27 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modo de visualização: 'list' (gerenciador tradicional) ou 'studio' (Studio Visual)
-  const [viewMode, setViewMode] = useState<'list' | 'studio'>('list');
-  const [studioFlowId, setStudioFlowId] = useState<string>('');
+  const initialFlowIdFromUrl = typeof window !== 'undefined'
+    ? (new URLSearchParams(window.location.search).get('flowId') || new URLSearchParams(window.location.search).get('id') || '')
+    : '';
+
+  const [viewMode, setViewMode] = useState<'list' | 'studio'>(initialFlowIdFromUrl ? 'studio' : 'list');
+  const [studioFlowId, setStudioFlowId] = useState<string>(initialFlowIdFromUrl);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = new URLSearchParams(window.location.search);
+      const fId = p.get('flowId') || p.get('id');
+      if (fId) {
+        setStudioFlowId(fId);
+        setViewMode('studio');
+      } else {
+        setViewMode('list');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Modal de Criação / Edição de Fluxo
   const [isFlowModalOpen, setIsFlowModalOpen] = useState(false);
@@ -489,6 +508,9 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
     const targetId = flowId || selectedFlowForSteps?.id || flows[0]?.id || 'flow-principal-pitoco';
     setStudioFlowId(targetId);
     setViewMode('studio');
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', `/fluxos?flowId=${encodeURIComponent(targetId)}`);
+    }
   };
 
   // Filtragem de Fluxos
@@ -515,6 +537,10 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
           onNavigate={(path) => {
             if (path === '/fluxos') {
               setViewMode('list');
+              setStudioFlowId('');
+              if (typeof window !== 'undefined') {
+                window.history.pushState({}, '', '/fluxos');
+              }
               loadData();
             } else if (onNavigate) {
               onNavigate(path);
@@ -522,6 +548,10 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
           }}
           onBack={() => {
             setViewMode('list');
+            setStudioFlowId('');
+            if (typeof window !== 'undefined') {
+              window.history.pushState({}, '', '/fluxos');
+            }
             loadData();
           }}
         />

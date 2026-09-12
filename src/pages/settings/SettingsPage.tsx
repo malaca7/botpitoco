@@ -186,8 +186,28 @@ export const SettingsPage: React.FC = () => {
     currentUserIdentifier 
   } = useTheme();
 
-  // Aba inicial agora é 'profile' (Perfil do Assistente). WhatsApp Conexão será a última aba.
-  const [activeTab, setActiveTab] = useState<string>('profile');
+  // Aba inicial lida da URL (?tab=...) ou 'profile' padrão
+  const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const initialTabFromUrl = queryParams?.get('tab') || 'profile';
+  const [activeTab, setActiveTab] = useState<string>(initialTabFromUrl);
+
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', `/configuracoes?tab=${newTab}`);
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const q = new URLSearchParams(window.location.search);
+      const t = q.get('tab');
+      if (t) setActiveTab(t);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const [isSaving, setIsSaving] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [customServerInput, setCustomServerInput] = useState(backendUrl || 'https://pitoco.discloud.app');
@@ -564,7 +584,7 @@ export const SettingsPage: React.FC = () => {
       {/* Tabs Bar: Reordenada com Conexão WhatsApp por ÚLTIMO */}
       <div className="flex items-center gap-1.5 p-1.5 bg-dark-900/80 rounded-2xl border border-white/5 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('profile')}
+          onClick={() => handleTabChange('profile')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
             activeTab === 'profile'
               ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
@@ -576,7 +596,7 @@ export const SettingsPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('company')}
+          onClick={() => handleTabChange('company')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
             activeTab === 'company'
               ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
@@ -588,7 +608,7 @@ export const SettingsPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('variables')}
+          onClick={() => handleTabChange('variables')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
             activeTab === 'variables'
               ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
@@ -600,7 +620,7 @@ export const SettingsPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('theme')}
+          onClick={() => handleTabChange('theme')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
             activeTab === 'theme'
               ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
@@ -613,7 +633,7 @@ export const SettingsPage: React.FC = () => {
 
         {/* Conexão WhatsApp Meta Cloud API & QR Code AGORA É A ÚLTIMA ABA */}
         <button
-          onClick={() => setActiveTab('whatsapp_qr')}
+          onClick={() => handleTabChange('whatsapp_qr')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
             activeTab === 'whatsapp_qr'
               ? 'bg-emerald-500 text-slate-950 font-bold shadow-lg shadow-emerald-500/20'
