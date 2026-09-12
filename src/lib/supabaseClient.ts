@@ -4,6 +4,7 @@ import {
   Category, 
   Product, 
   Client, 
+  Contact,
   SupportTicket, 
   Message, 
   Conversation, 
@@ -210,78 +211,6 @@ export async function deleteProduct(id: string): Promise<boolean> {
   }
 }
 
-// ==========================================
-// 4. CLIENTS & CRM
-// ==========================================
-export async function getClients(storeId?: string): Promise<Client[]> {
-  try {
-    let query = supabase
-      .from('clients')
-      .select('*')
-      .order('last_interaction', { ascending: false });
-    
-    if (storeId) {
-      query = query.eq('store_id', storeId);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    if (data) return data as Client[];
-  } catch (err) {
-    console.warn('[Supabase] getClients fallback:', err);
-  }
-  return [];
-}
-
-export async function upsertClient(client: Partial<Client>): Promise<Client | null> {
-  try {
-    const cleanPhone = String(client.phone || '').replace(/\D/g, '');
-    const payload = {
-      ...client,
-      phone: cleanPhone,
-      updated_at: new Date().toISOString(),
-    };
-    const { data, error } = await supabase
-      .from('clients')
-      .upsert(payload, { onConflict: 'phone' })
-      .select()
-      .single();
-    if (error) throw error;
-    return data as Client;
-  } catch (err) {
-    console.warn('[Supabase] upsertClient error:', err);
-    return null;
-  }
-}
-
-export async function deleteClient(id: string, phone?: string): Promise<boolean> {
-  try {
-    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
-    let query = supabase.from('clients').delete();
-    if (cleanPhone) {
-      query = query.or(`id.eq.${id},phone.eq.${cleanPhone},phone.eq.55${cleanPhone}`);
-    } else {
-      query = query.eq('id', id);
-    }
-    const { error } = await query;
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.warn('[Supabase] deleteClient error:', err);
-    return false;
-  }
-}
-
-export async function deleteAllClients(): Promise<boolean> {
-  try {
-    const { error } = await supabase.from('clients').delete().neq('id', '___NEVER_MATCH___');
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.warn('[Supabase] deleteAllClients error:', err);
-    return false;
-  }
-}
 
 // ==========================================
 // 5. CHAT MESSAGES & REALTIME
@@ -579,6 +508,172 @@ export function subscribeToConversations(onUpdate: (conv: Conversation) => void)
         if (payload.new) {
           onUpdate(payload.new as Conversation);
         }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+// ==========================================
+// 7.5 CRM & CLIENTES (SUPABASE CLOUD)
+// ==========================================
+export async function getClients(storeId?: string): Promise<Contact[]> {
+  try {
+    let query = supabase.from('clients').select('*');
+    if (storeId && storeId !== 'all') {
+      query = query.or(`store_id.eq.${storeId},store_id.is.null`);
+    }
+    const { data, error } = await query.order('updated_at', { ascending: false });
+    if (error) throw error;
+    if (Array.isArray(data)) {
+      return data.map((c: any) => ({
+        id: c.id,
+        name: c.name || 'Cliente WhatsApp',
+        phone: c.phone || '',
+        email: c.email || undefined,
+        address: c.address || undefined,
+        city: c.city || undefined,
+        notes: c.notes || undefined,
+        baby_name: c.baby_name || undefined,
+        due_date: c.due_date || undefined,
+        store_id: c.store_id || undefined,
+        store_name: c.store_name || undefined,
+        status: (c.status || 'active') as 'active' | 'blocked' | 'archived',
+        tags: Array.isArray(c.tags) ? c.tags : ['Cliente WhatsApp'],
+        total_orders: Number(c.total_orders) || 0,
+        total_spent: Number(c.total_spent) || 0,
+        last_interaction: c.last_interaction || c.updated_at || new Date().toISOString(),
+        created_at: c.created_at || new Date().toISOString(),
+        updated_at: c.updated_at || new Date().toISOString(),
+      }));
+    }
+  } catch (err) {
+    console.warn('[Supabase] getClients error:', err);
+  }
+  return [];
+}
+
+export async function deleteClient(id: string, phone?: string): Promise<boolean> {
+  try {
+    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+    const cleanId = String(id).replace(/\D/g, '');
+    
+    // Deletar da tabela clients por id ou phone
+    const clientQueries = [];
+    clientQueries.push(supabase.from('clients').delete().eq('id', id));
+    if (cleanPhone) {
+      clientQueries.push(supabase.from('clients').delete().eq('phone', cleanPhone));
+      clientQueries.push(supabase.from('clients').delete().eq('phone', `55${cleanPhone}`));
+      if (cleanPhone.startsWith('55')) {
+        clientQueries.push(supabase.from('clients').delete().eq('phone', cleanPhone.substring(2)));
+      }
+    }
+    if (cleanId && cleanId !== cleanPhone) {
+      clientQueries.push(supabase.from('clients').delete().eq('phone', cleanId));
+    }
+
+    // Deletar da tabela contacts por id ou phone
+    clientQueries.push(supabase.from('contacts').delete().eq('id', id));
+    if (cleanPhone) {
+      clientQueries.push(supabase.from('contacts').delete().eq('phone', cleanPhone));
+      clientQueries.push(supabase.from('contacts').delete().eq('phone', `55${cleanPhone}`));
+    }
+
+    await Promise.allSettled(clientQueries);
+    console.log('[Supabase] Cliente deletado com sucesso:', id, phone);
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] deleteClient error:', err);
+    return false;
+  }
+}
+
+export async function deleteAllClients(): Promise<boolean> {
+  try {
+    await Promise.allSettled([
+      supabase.from('clients').delete().neq('id', '___safe_delete_all___'),
+      supabase.from('contacts').delete().neq('id', '___safe_delete_all___')
+    ]);
+    console.log('[Supabase] Todos os clientes foram deletados com sucesso');
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] deleteAllClients error:', err);
+    return false;
+  }
+}
+
+export async function saveClient(contact: Partial<Contact>): Promise<Contact | null> {
+  try {
+    const cleanPhone = String(contact.phone || '').replace(/\D/g, '');
+    if (!cleanPhone) return null;
+    const clientId = contact.id || `contact-${cleanPhone}`;
+    const payload = {
+      id: clientId,
+      name: contact.name || 'Cliente WhatsApp',
+      phone: cleanPhone,
+      email: contact.email || null,
+      address: contact.address || null,
+      city: contact.city || null,
+      notes: contact.notes || null,
+      baby_name: contact.baby_name || null,
+      due_date: contact.due_date || null,
+      store_id: contact.store_id || null,
+      store_name: contact.store_name || null,
+      tags: Array.isArray(contact.tags) ? contact.tags : ['Cliente WhatsApp'],
+      total_orders: Number(contact.total_orders) || 0,
+      total_spent: Number(contact.total_spent) || 0,
+      last_interaction: contact.last_interaction || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    await Promise.allSettled([
+      supabase.from('clients').upsert(payload, { onConflict: 'phone' }),
+      supabase.from('contacts').upsert({
+        id: clientId,
+        name: payload.name,
+        phone: cleanPhone,
+        status: contact.status || 'active',
+        tags: payload.tags,
+        metadata: { baby_name: payload.baby_name, due_date: payload.due_date, notes: payload.notes },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'phone' })
+    ]);
+
+    return { ...(contact as Contact), ...payload };
+  } catch (err) {
+    console.warn('[Supabase] saveClient error:', err);
+    return null;
+  }
+}
+
+export const upsertClient = saveClient;
+
+export function subscribeToClients(onUpdate: () => void) {
+  const channel = supabase
+    .channel('all_clients_realtime')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'clients',
+      },
+      () => {
+        onUpdate();
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'contacts',
+      },
+      () => {
+        onUpdate();
       }
     )
     .subscribe();

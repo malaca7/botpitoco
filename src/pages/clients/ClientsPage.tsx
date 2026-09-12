@@ -109,14 +109,19 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
       loadData(true);
     }, 3500);
 
-    // 2. Sincronização instantânea ao focar a tela ou alternar de aba
+    // 2. Inscrição em tempo real no Supabase
+    const unsubscribeClients = StorageService.subscribeToClients(() => {
+      loadData(true);
+    });
+
+    // 3. Sincronização instantânea ao focar a tela ou alternar de aba
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
         loadData(true);
       }
     };
 
-    // 3. Sincronização quando o banco ou localStorage for atualizado
+    // 4. Sincronização quando o banco ou localStorage for atualizado
     const handleStorageChange = (e: StorageEvent) => {
       if (
         e.key === 'pitoco_contacts' ||
@@ -134,6 +139,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
 
     return () => {
       clearInterval(interval);
+      if (typeof unsubscribeClients === 'function') unsubscribeClients();
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('storage', handleStorageChange);

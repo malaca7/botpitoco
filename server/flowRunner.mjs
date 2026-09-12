@@ -274,129 +274,33 @@ export function loadDb() {
   const legacyBackup = readJsonFileSafe(LEGACY_BACKUP_PATH);
   const legacyDb = readJsonFileSafe(LEGACY_DB_PATH);
 
-  // Selecionar fontes disponíveis ordenadas por prioridade de preservação
-  const sources = [primaryDb, masterBackup, legacyBackup, legacyDb].filter(Boolean);
+  // Fonte principal com prioridade de integridade
+  const mainSource = primaryDb || masterBackup || legacyBackup || legacyDb;
+  const isBrandNew = !mainSource;
 
-  // Base inicial vazia que será populada
   const result = {
-    stores: [],
-    categories: [],
-    products: [],
-    flows: [],
-    nodes: {},
-    edges: {},
-    contacts: {},
-    conversations: {},
-    messages: {},
-    tickets: [],
-    appointments: [],
-    agendaSettings: DEFAULT_AGENDA_SETTINGS,
-    systemUsers: DEFAULT_SYSTEM_USERS,
-    attendants: initialAttendants,
-    cannedReplies: defaultCannedReplies,
-    botProfile: defaultBotProfile,
-    settings: initialSettings,
-    customVariables: defaultCustomVariables,
-    auditLogs: [],
-    sessions: {},
-    rolePermissions: {},
+    stores: Array.isArray(mainSource?.stores) && mainSource.stores.length > 0 ? mainSource.stores : (isBrandNew ? [...initialStores] : (mainSource?.stores || [...initialStores])),
+    categories: Array.isArray(mainSource?.categories) && mainSource.categories.length > 0 ? mainSource.categories : (isBrandNew ? [...initialCategories] : (mainSource?.categories || [...initialCategories])),
+    products: Array.isArray(mainSource?.products) && mainSource.products.length > 0 ? mainSource.products : (isBrandNew ? [...initialProducts] : (mainSource?.products || [...initialProducts])),
+    flows: Array.isArray(mainSource?.flows) ? mainSource.flows : (isBrandNew ? [...sampleFlows] : []),
+    nodes: mainSource?.nodes && typeof mainSource.nodes === 'object' ? { ...mainSource.nodes } : (isBrandNew ? { 'flow-pitoco-001': initialFlowNodes } : {}),
+    edges: mainSource?.edges && typeof mainSource.edges === 'object' ? { ...mainSource.edges } : (isBrandNew ? { 'flow-pitoco-001': initialFlowEdges } : {}),
+    contacts: mainSource?.contacts && typeof mainSource.contacts === 'object' ? { ...mainSource.contacts } : {},
+    conversations: mainSource?.conversations && typeof mainSource.conversations === 'object' ? { ...mainSource.conversations } : {},
+    messages: mainSource?.messages && typeof mainSource.messages === 'object' ? { ...mainSource.messages } : {},
+    tickets: Array.isArray(mainSource?.tickets) ? mainSource.tickets : (isBrandNew ? [...initialTickets] : []),
+    appointments: Array.isArray(mainSource?.appointments) ? mainSource.appointments : [],
+    agendaSettings: mainSource?.agendaSettings || DEFAULT_AGENDA_SETTINGS,
+    systemUsers: mainSource?.systemUsers || DEFAULT_SYSTEM_USERS,
+    attendants: mainSource?.attendants || initialAttendants,
+    cannedReplies: mainSource?.cannedReplies || defaultCannedReplies,
+    botProfile: mainSource?.botProfile ? { ...defaultBotProfile, ...mainSource.botProfile } : defaultBotProfile,
+    settings: mainSource?.settings ? { ...initialSettings, ...mainSource.settings } : initialSettings,
+    customVariables: mainSource?.customVariables || defaultCustomVariables,
+    auditLogs: Array.isArray(mainSource?.auditLogs) ? mainSource.auditLogs : [],
+    sessions: mainSource?.sessions || {},
+    rolePermissions: mainSource?.rolePermissions || {},
   };
-
-  // Se houver qualquer fonte salva anteriormente, consolidar os dados
-  for (const src of sources) {
-    if (Array.isArray(src.stores) && src.stores.length > 0 && result.stores.length === 0) {
-      result.stores = src.stores;
-    }
-    if (Array.isArray(src.categories) && src.categories.length > 0 && result.categories.length === 0) {
-      result.categories = src.categories;
-    }
-    if (Array.isArray(src.products) && src.products.length > 0 && result.products.length === 0) {
-      result.products = src.products;
-    }
-    if (Array.isArray(src.flows) && src.flows.length > 0 && result.flows.length === 0) {
-      result.flows = src.flows;
-    }
-    if (src.nodes && Object.keys(src.nodes).length > 0 && Object.keys(result.nodes).length === 0) {
-      result.nodes = { ...src.nodes };
-    }
-    if (src.edges && Object.keys(src.edges).length > 0 && Object.keys(result.edges).length === 0) {
-      result.edges = { ...src.edges };
-    }
-    if (src.contacts && Object.keys(src.contacts).length > 0 && Object.keys(result.contacts).length === 0) {
-      result.contacts = { ...src.contacts };
-    }
-    if (src.conversations && Object.keys(src.conversations).length > 0 && Object.keys(result.conversations).length === 0) {
-      result.conversations = { ...src.conversations };
-    }
-    if (src.messages && Object.keys(src.messages).length > 0 && Object.keys(result.messages).length === 0) {
-      result.messages = { ...src.messages };
-    }
-    if (Array.isArray(src.tickets) && src.tickets.length > 0 && result.tickets.length === 0) {
-      result.tickets = src.tickets;
-    }
-    if (Array.isArray(src.appointments) && src.appointments.length > 0 && result.appointments.length === 0) {
-      result.appointments = src.appointments;
-    }
-    if (src.agendaSettings && src.agendaSettings.services?.length > 0 && result.agendaSettings === DEFAULT_AGENDA_SETTINGS) {
-      result.agendaSettings = src.agendaSettings;
-    }
-    if (Array.isArray(src.systemUsers) && src.systemUsers.length > 0 && result.systemUsers === DEFAULT_SYSTEM_USERS) {
-      result.systemUsers = src.systemUsers;
-    }
-    if (Array.isArray(src.attendants) && src.attendants.length > 0 && result.attendants === initialAttendants) {
-      result.attendants = src.attendants;
-    }
-    if (Array.isArray(src.cannedReplies) && src.cannedReplies.length > 0 && result.cannedReplies === defaultCannedReplies) {
-      result.cannedReplies = src.cannedReplies;
-    }
-    if (src.botProfile && Object.keys(src.botProfile).length > 0 && result.botProfile === defaultBotProfile) {
-      result.botProfile = { ...defaultBotProfile, ...src.botProfile };
-    }
-    if (src.settings && Object.keys(src.settings).length > 0 && result.settings === initialSettings) {
-      result.settings = { ...initialSettings, ...src.settings };
-    }
-    if (Array.isArray(src.customVariables) && src.customVariables.length > 0 && result.customVariables === defaultCustomVariables) {
-      result.customVariables = src.customVariables;
-    }
-    if (Array.isArray(src.auditLogs) && src.auditLogs.length > 0 && result.auditLogs.length === 0) {
-      result.auditLogs = src.auditLogs;
-    }
-    if (src.sessions && Object.keys(src.sessions).length > 0 && Object.keys(result.sessions).length === 0) {
-      result.sessions = { ...src.sessions };
-    }
-    if (src.rolePermissions && Object.keys(src.rolePermissions).length > 0 && Object.keys(result.rolePermissions).length === 0) {
-      result.rolePermissions = { ...src.rolePermissions };
-    }
-  }
-
-  // Garantir dados iniciais oficiais do Pitoco se ainda estiverem vazios
-  if (!result.stores || result.stores.length === 0) {
-    result.stores = [...initialStores];
-  }
-  if (!result.categories || result.categories.length === 0) {
-    result.categories = [...initialCategories];
-  }
-  if (!result.products || result.products.length === 0) {
-    result.products = [...initialProducts];
-  }
-  if (!result.flows || result.flows.length === 0) {
-    result.flows = [...sampleFlows];
-  }
-  if (!result.nodes || Object.keys(result.nodes).length === 0) {
-    result.nodes = { 'flow-pitoco-001': initialFlowNodes };
-  }
-  if (!result.edges || Object.keys(result.edges).length === 0) {
-    result.edges = { 'flow-pitoco-001': initialFlowEdges };
-  }
-  if (!result.tickets || result.tickets.length === 0) {
-    result.tickets = [...initialTickets];
-  }
-  if (!result.contacts) {
-    result.contacts = {};
-  }
-  if (!result.conversations) {
-    result.conversations = {};
-  }
 
   migrateLidContacts(result);
   return result;

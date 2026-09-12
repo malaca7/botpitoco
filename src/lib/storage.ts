@@ -742,7 +742,20 @@ export const StorageService = {
   // 5. CRM & CLIENTES
   // ==============================================================================
   async getContacts(storeId?: string): Promise<Contact[]> {
-    // 1. Tentar carregar do Backend Oficial (Discloud)
+    // 1. Tentar carregar do Supabase (Fonte Central da Verdade)
+    if (SupabaseService.isSupabaseReady) {
+      try {
+        const dbClients = await SupabaseService.getClients(storeId);
+        if (Array.isArray(dbClients)) {
+          setItem(STORAGE_KEYS.CONTACTS, dbClients);
+          return dbClients;
+        }
+      } catch (err) {
+        console.warn('[Storage] Supabase getClients error:', err);
+      }
+    }
+
+    // 2. Tentar carregar do Backend Oficial (Discloud)
     try {
       const url = storeId ? `${API_BASE}/api/contacts?store_id=${storeId}` : `${API_BASE}/api/contacts`;
       const res = await fetch(url, { signal: AbortSignal.timeout(3000) }).catch(() => null);
@@ -754,24 +767,6 @@ export const StorageService = {
         }
       }
     } catch {}
-
-    // 2. Tentar carregar do Supabase
-    if (SupabaseService.isSupabaseReady) {
-      try {
-        const dbClients = await SupabaseService.getClients(storeId);
-        if (Array.isArray(dbClients)) {
-          const mapped = dbClients.map(c => ({
-            ...c,
-            status: 'active' as const,
-            tags: c.tags || ['Cliente WhatsApp'],
-          }));
-          setItem(STORAGE_KEYS.CONTACTS, mapped);
-          return mapped;
-        }
-      } catch (err) {
-        console.warn('[Storage] Supabase getClients error:', err);
-      }
-    }
 
     // 3. Fallback apenas para o localStorage sem injetar dados fictícios!
     let contacts = getItem<Contact[]>(STORAGE_KEYS.CONTACTS, []);
@@ -1142,11 +1137,11 @@ export const StorageService = {
   // 9. FLOWS & GESTÃO COMPLETA DE FLUXOS
   // ==============================================================================
   async getFlows(): Promise<Flow[]> {
-    // 1. Tentar carregar diretamente do Supabase (prioridade máxima)
+    // 1. Tentar carregar diretamente do Supabase (prioridade máxima e fonte da verdade)
     if (SupabaseService.isSupabaseReady) {
       try {
         const cloudFlows = await SupabaseService.getFlows();
-        if (Array.isArray(cloudFlows) && cloudFlows.length > 0) {
+        if (Array.isArray(cloudFlows)) {
           setItem(STORAGE_KEYS.FLOWS, cloudFlows);
           return cloudFlows;
         }
@@ -1160,7 +1155,7 @@ export const StorageService = {
       const res = await fetch(`${API_BASE}/api/flows`, { signal: AbortSignal.timeout(2000) });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setItem(STORAGE_KEYS.FLOWS, data);
           return data;
         }
@@ -1169,7 +1164,7 @@ export const StorageService = {
       // Usar cache local em caso de offline
     }
 
-    return getItem<Flow[]>(STORAGE_KEYS.FLOWS, sampleFlows);
+    return getItem<Flow[]>(STORAGE_KEYS.FLOWS, []);
   },
 
   async getFlow(id: string): Promise<Flow | null> {
@@ -1237,7 +1232,7 @@ export const StorageService = {
   },
 
   async deleteFlow(id: string): Promise<boolean> {
-    let flows = getItem<Flow[]>(STORAGE_KEYS.FLOWS, sampleFlows);
+    let flows = getItem<Flow[]>(STORAGE_KEYS.FLOWS, []);
     flows = flows.filter(f => f.id !== id);
     setItem(STORAGE_KEYS.FLOWS, flows);
 
@@ -1424,7 +1419,7 @@ export const StorageService = {
     if (SupabaseService.isSupabaseReady) {
       try {
         const cloudFlows = await SupabaseService.getFlows();
-        if (Array.isArray(cloudFlows) && cloudFlows.length > 0) {
+        if (Array.isArray(cloudFlows)) {
           setItem(STORAGE_KEYS.FLOWS, cloudFlows);
           return cloudFlows;
         }
@@ -1439,6 +1434,13 @@ export const StorageService = {
   subscribeToFlows(callback: () => void) {
     if (SupabaseService.isSupabaseReady && typeof (SupabaseService as any).subscribeToFlows === 'function') {
       return (SupabaseService as any).subscribeToFlows(callback);
+    }
+    return () => {};
+  },
+
+  subscribeToClients(callback: () => void) {
+    if (SupabaseService.isSupabaseReady && typeof (SupabaseService as any).subscribeToClients === 'function') {
+      return (SupabaseService as any).subscribeToClients(callback);
     }
     return () => {};
   },

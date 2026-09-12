@@ -1049,32 +1049,36 @@ app.get('/api/contacts', async (req, res) => {
   try {
     const db = loadDb();
     let contactsList = [];
+
+    // Prioridade 1: Buscar do Supabase em nuvem
+    if (supabaseServer) {
+      try {
+        let query = supabaseServer.from('clients').select('*').order('last_interaction', { ascending: false });
+        if (req.query.store_id) {
+          query = query.eq('store_id', req.query.store_id);
+        }
+        const { data, error } = await query;
+        if (!error && Array.isArray(data)) {
+          // Atualizar cache local do db.contacts para refletir a nuvem
+          const cloudMap = {};
+          data.forEach(c => {
+            const p = String(c.phone || '').replace(/\D/g, '');
+            if (p) cloudMap[p] = c;
+          });
+          db.contacts = cloudMap;
+          saveDb(db);
+          return res.json(data);
+        }
+      } catch (cloudErr) {
+        console.warn('[Contacts API] Falha ao consultar Supabase, usando cache local:', cloudErr.message);
+      }
+    }
+
+    // Fallback: Cache local
     if (Array.isArray(db.contacts)) {
       contactsList = [...db.contacts];
     } else if (db.contacts && typeof db.contacts === 'object') {
       contactsList = Object.values(db.contacts);
-    }
-
-    // Complementar com contatos das conversas caso não estejam no db.contacts
-    if (db.conversations) {
-      Object.values(db.conversations).forEach(conv => {
-        if (!conv) return;
-        const phone = String(conv.contact_phone || conv.phone || '').replace(/\D/g, '');
-        if (!phone) return;
-        const exists = contactsList.some(c => String(c.phone || '').replace(/\D/g, '') === phone);
-        if (!exists) {
-          contactsList.push({
-            id: conv.contact_id || `contact-${phone}`,
-            phone: phone,
-            name: conv.contact_name || 'Cliente WhatsApp',
-            status: 'active',
-            tags: ['Cliente WhatsApp'],
-            last_interaction: conv.last_message_at || new Date().toISOString(),
-            created_at: conv.created_at || new Date().toISOString(),
-            updated_at: conv.updated_at || new Date().toISOString(),
-          });
-        }
-      });
     }
 
     if (req.query.store_id) {
@@ -1187,24 +1191,97 @@ app.put('/api/contacts/:id', async (req, res) => {
   }
 });
 
+app.delete('/api/contacts', async (req, res) => {
+  try {
+    const db = loadDb();
+    db.contacts = {};
+    db.conversations = {};
+    db.messages = {};
+    saveDb(db);
+
+    if (supabaseServer) {
+      await supabaseServer.from('clients').delete().neq('id', '___none___').catch(() => {});
+      await supabaseServer.from('contacts').delete().neq('id', '___none___').catch(() => {});
+    }
+
+    console.log('[Contacts API] 🗑️ Todos os contatos e conversas foram removidos.');
+    res.json({ success: true, message: 'Todos os contatos foram removidos com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/contacts/:id', async (req, res) => {
   try {
     const db = loadDb();
     const id = req.params.id;
-    const cleanPhone = id.replace(/\D/g, '');
-    if (Array.isArray(db.contacts)) {
-      db.contacts = db.contacts.filter(c => c.id !== id && String(c.phone || '').replace(/\D/g, '') !== cleanPhone);
-    } else if (db.contacts) {
-      delete db.contacts[id];
-      delete db.contacts[cleanPhone];
+    const cleanPhone = String(id || '').replace(/\D/g, '');
+    const phoneVariants = new Set([id]);
+    if (cleanPhone) {
+      phoneVariants.add(cleanPhone);
+      phoneVariants.add(`55${cleanPhone}`);
+      if (cleanPhone.startsWith('55')) {
+        phoneVariants.add(cleanPhone.substring(2));
+      }
     }
+
+    // 1. Remover do cache local db.contacts
+    if (Array.isArray(db.contacts)) {
+      db.contacts = db.contacts.filter(c => {
+        const cPhone = String(c.phone || '').replace(/\D/g, '');
+        return c.id !== id && !phoneVariants.has(cPhone);
+      });
+    } else if (db.contacts && typeof db.contacts === 'object') {
+      delete db.contacts[id];
+      for (const p of phoneVariants) {
+        delete db.contacts[p];
+        delete db.contacts[`contact-${p}`];
+      }
+      for (const [key, contact] of Object.entries(db.contacts)) {
+        const cPhone = String(contact.phone || '').replace(/\D/g, '');
+        if (contact.id === id || phoneVariants.has(cPhone) || phoneVariants.has(key)) {
+          delete db.contacts[key];
+        }
+      }
+    }
+
+    // 2. Remover conversas e mensagens vinculadas para evitar ressuscitação
+    if (db.conversations && typeof db.conversations === 'object') {
+      for (const p of phoneVariants) {
+        delete db.conversations[`conv-${p}`];
+        delete db.conversations[p];
+      }
+      for (const [convId, conv] of Object.entries(db.conversations)) {
+        const convPhone = String(conv.contact_phone || conv.phone || '').replace(/\D/g, '');
+        if (phoneVariants.has(convPhone) || conv.contact_id === id) {
+          delete db.conversations[convId];
+        }
+      }
+    }
+
+    if (db.messages && typeof db.messages === 'object') {
+      for (const p of phoneVariants) {
+        delete db.messages[`conv-${p}`];
+      }
+    }
+
     saveDb(db);
 
+    // 3. Remover definitivamente do Supabase
     if (supabaseServer) {
-      await supabaseServer.from('clients').delete().eq('phone', cleanPhone).catch(() => {});
-      await supabaseServer.from('contacts').delete().eq('phone', cleanPhone).catch(() => {});
+      for (const p of phoneVariants) {
+        await supabaseServer.from('clients').delete().eq('phone', p).catch(() => {});
+        await supabaseServer.from('clients').delete().eq('id', p).catch(() => {});
+        await supabaseServer.from('clients').delete().eq('id', `contact-${p}`).catch(() => {});
+        await supabaseServer.from('contacts').delete().eq('phone', p).catch(() => {});
+        await supabaseServer.from('contacts').delete().eq('id', p).catch(() => {});
+        await supabaseServer.from('contacts').delete().eq('id', `contact-${p}`).catch(() => {});
+      }
+      await supabaseServer.from('clients').delete().eq('id', id).catch(() => {});
+      await supabaseServer.from('contacts').delete().eq('id', id).catch(() => {});
     }
 
+    console.log(`[Contacts API] 🗑️ Contato ${id} (e telefones ${[...phoneVariants].join(', ')}) removido.`);
     res.json({ success: true, message: `Contato ${id} removido` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1363,96 +1440,6 @@ app.delete('/api/products/:id', (req, res) => {
   }
 });
 
-// ==============================================================================
-// 5. CRM & CONTATOS DE CLIENTES CRUD
-// ==============================================================================
-app.get('/api/contacts', (req, res) => {
-  try {
-    const db = loadDb();
-    let contacts = Object.values(db.contacts || {});
-    if (req.query.store_id) {
-      contacts = contacts.filter(c => !c.store_id || c.store_id === req.query.store_id);
-    }
-    res.json(contacts);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/contacts', (req, res) => {
-  try {
-    const db = loadDb();
-    if (!db.contacts) db.contacts = {};
-    const contactData = req.body;
-    const cleanPhone = String(contactData.phone || '').replace(/\D/g, '');
-    if (!cleanPhone) {
-      return res.status(400).json({ error: 'Telefone do contato é obrigatório' });
-    }
-
-    const newContact = {
-      id: contactData.id || `client-${cleanPhone}`,
-      phone: cleanPhone,
-      name: contactData.name || 'Cliente WhatsApp',
-      email: contactData.email || null,
-      store_id: contactData.store_id || null,
-      store_name: contactData.store_name || null,
-      baby_name: contactData.baby_name || null,
-      due_date: contactData.due_date || null,
-      status: contactData.status || 'active',
-      tags: Array.isArray(contactData.tags) ? contactData.tags : ['Cliente'],
-      total_orders: Number(contactData.total_orders) || 0,
-      total_spent: Number(contactData.total_spent) || 0,
-      created_at: contactData.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      ...contactData,
-    };
-
-    db.contacts[cleanPhone] = newContact;
-    saveDb(db);
-    res.json({ success: true, contact: newContact });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete('/api/contacts', (req, res) => {
-  try {
-    const db = loadDb();
-    db.contacts = {};
-    saveDb(db);
-    res.json({ success: true, message: 'Todos os contatos foram removidos' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete('/api/contacts/:id', (req, res) => {
-  try {
-    const db = loadDb();
-    const id = req.params.id;
-    const cleanPhone = id.replace(/\D/g, '');
-    if (db.contacts) {
-      delete db.contacts[id];
-      if (cleanPhone) {
-        delete db.contacts[cleanPhone];
-        delete db.contacts[`55${cleanPhone}`];
-        if (cleanPhone.startsWith('55')) {
-          delete db.contacts[cleanPhone.substring(2)];
-        }
-      }
-      for (const [key, contact] of Object.entries(db.contacts)) {
-        const cPhone = String(contact.phone || '').replace(/\D/g, '');
-        if (contact.id === id || (cleanPhone && (cPhone === cleanPhone || cPhone === `55${cleanPhone}` || cleanPhone === `55${cPhone}`))) {
-          delete db.contacts[key];
-        }
-      }
-    }
-    saveDb(db);
-    res.json({ success: true, message: `Contato ${id} removido` });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // ==============================================================================
 // 6. CONVERSAS & MENSAGENS DO ATENDIMENTO CRUD
@@ -2102,7 +2089,7 @@ app.post('/api/flows/sync-database', async (req, res) => {
         supabaseServer.from('flow_edges').select('*'),
       ]);
 
-      if (Array.isArray(flowsRes.data) && flowsRes.data.length > 0) {
+      if (Array.isArray(flowsRes.data)) {
         db.flows = flowsRes.data;
       }
       if (Array.isArray(nodesRes.data)) {
@@ -2654,11 +2641,31 @@ app.listen(PORT, HOST, async () => {
     }
   }
 
-  // Sincronização automática em segundo plano contínua com o Supabase (a cada 60s)
-  setTimeout(() => {
-    syncToSupabase().catch(() => {});
-    setInterval(() => {
-      syncToSupabase().catch(() => {});
-    }, 60000);
-  }, 5000);
+  // Sincronização segura no startup: Carregar estado mais recente do Supabase (Cloud First)
+  setTimeout(async () => {
+    try {
+      if (supabaseServer) {
+        const [flowsRes, clientsRes] = await Promise.all([
+          supabaseServer.from('flows').select('*'),
+          supabaseServer.from('clients').select('*'),
+        ]);
+        const db = loadDb();
+        if (Array.isArray(flowsRes.data)) {
+          db.flows = flowsRes.data;
+        }
+        if (Array.isArray(clientsRes.data)) {
+          const cloudMap = {};
+          clientsRes.data.forEach(c => {
+            const p = String(c.phone || '').replace(/\D/g, '');
+            if (p) cloudMap[p] = c;
+          });
+          db.contacts = cloudMap;
+        }
+        saveDb(db);
+        console.log(`[Startup Sync] ☁️ Sincronização inicial concluída com Supabase: ${db.flows?.length || 0} fluxos e ${Object.keys(db.contacts || {}).length} clientes.`);
+      }
+    } catch (e) {
+      console.warn('[Startup Sync] Aviso ao sincronizar com Supabase no início:', e.message);
+    }
+  }, 3000);
 });
