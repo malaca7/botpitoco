@@ -104,7 +104,7 @@ export async function syncContactToSupabase(contact) {
       last_interaction: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    await supabaseClient.from('contacts').upsert(payload, { onConflict: 'phone' }).catch(() => {});
+    await supabaseClient.from('contacts').upsert(payload, { onConflict: 'phone' });
 
     // 2. Tabela clients (Tabela mestre utilizada pelo CRM e tela de Clientes)
     const clientPayload = {
@@ -121,7 +121,7 @@ export async function syncContactToSupabase(contact) {
       last_interaction: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    await supabaseClient.from('clients').upsert(clientPayload, { onConflict: 'phone' }).catch(() => {});
+    await supabaseClient.from('clients').upsert(clientPayload, { onConflict: 'phone' });
   } catch (err) {
     // Non-blocking
   }

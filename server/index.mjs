@@ -71,6 +71,14 @@ const supabaseServer = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
     })
   : null;
 
+const safeSupa = async (builder) => {
+  try {
+    return await builder;
+  } catch (err) {
+    return { data: null, error: err };
+  }
+};
+
 const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '50mb' }));
@@ -579,24 +587,24 @@ async function recordMessageInSupabase(phone, name, direction, content) {
       clientPayload.name = name;
     }
 
-    await supabaseServer.from('clients').upsert(clientPayload, { onConflict: 'phone' }).catch(() => {});
+    await safeSupa(supabaseServer.from('clients').upsert(clientPayload, { onConflict: 'phone' }));
 
-    await supabaseServer.from('conversations').upsert({
+    await safeSupa(supabaseServer.from('conversations').upsert({
       id: convId,
       phone: cleanPhone,
       client_name: name || 'Cliente WhatsApp',
       last_message: content,
       last_message_at: new Date().toISOString(),
-    }, { onConflict: 'id' }).catch(() => {});
+    }, { onConflict: 'id' }));
 
-    await supabaseServer.from('chat_messages').insert([{
+    await safeSupa(supabaseServer.from('chat_messages').insert([{
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       conversation_id: convId,
       direction,
       content,
       author_name: direction === 'inbound' ? (name || 'Cliente') : 'Pitoco Bot',
       created_at: new Date().toISOString(),
-    }]).catch(() => {});
+    }]));
   } catch (e) {}
 }
 
@@ -937,12 +945,12 @@ async function syncBotProfileToSupabase(profile) {
     if (typeof profile.play_audio_alerts === 'boolean') botPayload.play_audio_alerts = profile.play_audio_alerts;
 
     await Promise.all([
-      supabaseServer.from('bot_config').upsert(botPayload, { onConflict: 'id' }).catch(() => {}),
-      supabaseServer.from('settings').upsert({
+      safeSupa(supabaseServer.from('bot_config').upsert(botPayload, { onConflict: 'id' })),
+      safeSupa(supabaseServer.from('settings').upsert({
         id: 'default',
         bot_profile: profile,
         updated_at: now,
-      }, { onConflict: 'id' }).catch(() => {})
+      }, { onConflict: 'id' }))
     ]);
   } catch (err) {
     console.warn('[Supabase Sync] syncBotProfileToSupabase error:', err.message);
@@ -954,8 +962,8 @@ async function syncCustomVariablesToSupabase(vars) {
   try {
     const now = new Date().toISOString();
     await Promise.all([
-      supabaseServer.from('bot_config').upsert({ id: 'default', custom_variables: vars, updated_at: now }, { onConflict: 'id' }).catch(() => {}),
-      supabaseServer.from('settings').upsert({ id: 'default', custom_variables: vars, updated_at: now }, { onConflict: 'id' }).catch(() => {}),
+      safeSupa(supabaseServer.from('bot_config').upsert({ id: 'default', custom_variables: vars, updated_at: now }, { onConflict: 'id' })),
+      safeSupa(supabaseServer.from('settings').upsert({ id: 'default', custom_variables: vars, updated_at: now }, { onConflict: 'id' })),
     ]);
   } catch (err) {
     console.warn('[Supabase Sync] syncCustomVariablesToSupabase error:', err.message);
@@ -970,7 +978,7 @@ async function syncSettingsToSupabase(settings) {
       ...settings,
       updated_at: new Date().toISOString(),
     };
-    await supabaseServer.from('settings').upsert(payload, { onConflict: 'id' }).catch(() => {});
+    await safeSupa(supabaseServer.from('settings').upsert(payload, { onConflict: 'id' }));
   } catch (err) {
     console.warn('[Supabase Sync] syncSettingsToSupabase error:', err.message);
   }
@@ -980,7 +988,7 @@ app.get('/api/bot-config', async (req, res) => {
   try {
     const db = loadDb();
     if (supabaseServer) {
-      const { data } = await supabaseServer.from('bot_config').select('*').eq('id', 'default').maybeSingle().catch(() => ({ data: null }));
+      const { data } = await safeSupa(supabaseServer.from('bot_config').select('*').eq('id', 'default').maybeSingle());
       if (data) {
         db.botProfile = {
           ...(db.botProfile || {}),
@@ -1033,7 +1041,7 @@ app.get('/api/settings', async (req, res) => {
   try {
     const db = loadDb();
     if (supabaseServer) {
-      const { data } = await supabaseServer.from('settings').select('*').eq('id', 'default').maybeSingle().catch(() => ({ data: null }));
+      const { data } = await safeSupa(supabaseServer.from('settings').select('*').eq('id', 'default').maybeSingle());
       if (data) {
         db.settings = { ...(db.settings || {}), ...data };
         saveDb(db);
@@ -1308,8 +1316,8 @@ app.delete('/api/contacts', async (req, res) => {
     saveDb(db);
 
     if (supabaseServer) {
-      await supabaseServer.from('clients').delete().neq('id', '___none___').catch(() => {});
-      await supabaseServer.from('contacts').delete().neq('id', '___none___').catch(() => {});
+      await safeSupa(supabaseServer.from('clients').delete().neq('id', '___none___'));
+      await safeSupa(supabaseServer.from('contacts').delete().neq('id', '___none___'));
     }
 
     console.log('[Contacts API] 🗑️ Todos os contatos e conversas foram removidos.');
@@ -1378,15 +1386,15 @@ app.delete('/api/contacts/:id', async (req, res) => {
     // 3. Remover definitivamente do Supabase
     if (supabaseServer) {
       for (const p of phoneVariants) {
-        await supabaseServer.from('clients').delete().eq('phone', p).catch(() => {});
-        await supabaseServer.from('clients').delete().eq('id', p).catch(() => {});
-        await supabaseServer.from('clients').delete().eq('id', `contact-${p}`).catch(() => {});
-        await supabaseServer.from('contacts').delete().eq('phone', p).catch(() => {});
-        await supabaseServer.from('contacts').delete().eq('id', p).catch(() => {});
-        await supabaseServer.from('contacts').delete().eq('id', `contact-${p}`).catch(() => {});
+        await safeSupa(supabaseServer.from('clients').delete().eq('phone', p));
+        await safeSupa(supabaseServer.from('clients').delete().eq('id', p));
+        await safeSupa(supabaseServer.from('clients').delete().eq('id', `contact-${p}`));
+        await safeSupa(supabaseServer.from('contacts').delete().eq('phone', p));
+        await safeSupa(supabaseServer.from('contacts').delete().eq('id', p));
+        await safeSupa(supabaseServer.from('contacts').delete().eq('id', `contact-${p}`));
       }
-      await supabaseServer.from('clients').delete().eq('id', id).catch(() => {});
-      await supabaseServer.from('contacts').delete().eq('id', id).catch(() => {});
+      await safeSupa(supabaseServer.from('clients').delete().eq('id', id));
+      await safeSupa(supabaseServer.from('contacts').delete().eq('id', id));
     }
 
     console.log(`[Contacts API] 🗑️ Contato ${id} (e telefones ${[...phoneVariants].join(', ')}) removido.`);
@@ -1764,16 +1772,17 @@ app.patch('/api/conversations/:id/assign', async (req, res) => {
 
     if (supabaseServer) {
       const convObj = db.conversations[convKey];
-      await supabaseServer.from('conversations').upsert({
+      const sRes = await safeSupa(supabaseServer.from('conversations').upsert({
         id: convObj.id || convKey,
         phone: convObj.phone || convObj.contact_phone || cleanId || '558199999999',
         client_name: convObj.contact_name || 'Cliente WhatsApp',
         assigned_to: finalAttendant,
         status: 'human',
         updated_at: new Date().toISOString()
-      }, { onConflict: 'id' }).catch((err) => {
-        console.warn('[Server] Falha ao upsert conversation no Supabase:', err.message);
-      });
+      }, { onConflict: 'id' }));
+      if (sRes.error) {
+        console.warn('[Server] Falha ao upsert conversation no Supabase:', sRes.error.message);
+      }
     }
 
     console.log(`[Conversations API] 👤 Conversa "${convKey}" assumida por: ${finalAttendant}`);
@@ -1829,7 +1838,7 @@ app.patch('/api/conversations/:id/status', async (req, res) => {
 
     if (supabaseServer) {
       const convObj = db.conversations[convKey];
-      await supabaseServer.from('conversations').upsert({
+      const sRes = await safeSupa(supabaseServer.from('conversations').upsert({
         id: convObj.id || convKey,
         phone: convObj.phone || convObj.contact_phone || cleanId || '558199999999',
         client_name: convObj.contact_name || 'Cliente WhatsApp',
@@ -1837,9 +1846,10 @@ app.patch('/api/conversations/:id/status', async (req, res) => {
         assigned_to: db.conversations[convKey].assigned_to || null,
         ...(store_id ? { store_id } : {}),
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'id' }).catch((err) => {
-        console.warn('[Server] Falha ao upsert status no Supabase:', err.message);
-      });
+      }, { onConflict: 'id' }));
+      if (sRes.error) {
+        console.warn('[Server] Falha ao upsert status no Supabase:', sRes.error.message);
+      }
     }
 
     res.json({ success: true, conversation: db.conversations[convKey] });
@@ -2569,7 +2579,7 @@ app.get('/api/custom-variables', async (req, res) => {
   try {
     const db = loadDb();
     if (supabaseServer && (!db.customVariables || db.customVariables.length === 0)) {
-      const { data } = await supabaseServer.from('bot_config').select('custom_variables').eq('id', 'default').maybeSingle().catch(() => ({ data: null }));
+      const { data } = await safeSupa(supabaseServer.from('bot_config').select('custom_variables').eq('id', 'default').maybeSingle());
       if (Array.isArray(data?.custom_variables) && data.custom_variables.length > 0) {
         db.customVariables = data.custom_variables;
         saveDb(db);
@@ -2763,10 +2773,10 @@ app.listen(PORT, HOST, async () => {
     try {
       if (supabaseServer) {
         const [flowsRes, clientsRes, botRes, setRes] = await Promise.all([
-          supabaseServer.from('flows').select('*'),
-          supabaseServer.from('clients').select('*'),
-          supabaseServer.from('bot_config').select('*').eq('id', 'default').maybeSingle().catch(() => ({ data: null })),
-          supabaseServer.from('settings').select('*').eq('id', 'default').maybeSingle().catch(() => ({ data: null })),
+          safeSupa(supabaseServer.from('flows').select('*')),
+          safeSupa(supabaseServer.from('clients').select('*')),
+          safeSupa(supabaseServer.from('bot_config').select('*').eq('id', 'default').maybeSingle()),
+          safeSupa(supabaseServer.from('settings').select('*').eq('id', 'default').maybeSingle()),
         ]);
         const db = loadDb();
         if (Array.isArray(flowsRes.data)) {
