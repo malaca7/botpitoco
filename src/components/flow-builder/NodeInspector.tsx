@@ -415,12 +415,50 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             </div>
 
             {config.eventType === 'keyword' && (
-              <Input
-                label="Palavras-chave (separadas por vírgula)"
-                value={config.keywords || ''}
-                onChange={(e) => handleConfigChange('keywords', e.target.value)}
-                placeholder="Ex: preco, planos, ajuda, suporte"
-              />
+              <div className="space-y-3.5 pt-1">
+                {/* Seletor de Modo de Correspondência: Específica vs Contém */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-slate-300">Modo de Correspondência</label>
+                  <div className="grid grid-cols-2 p-1 bg-dark-950/80 border border-slate-700/60 rounded-xl gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleConfigChange('keywordMatchType', 'exact')}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition-all ${
+                        (config.keywordMatchType || 'exact') === 'exact'
+                          ? 'bg-amber-500 text-dark-950 font-bold shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                      }`}
+                    >
+                      <span>🎯</span>
+                      <span>Específica (Exata)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleConfigChange('keywordMatchType', 'contains')}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition-all ${
+                        config.keywordMatchType === 'contains'
+                          ? 'bg-amber-500 text-dark-950 font-bold shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                      }`}
+                    >
+                      <span>🔍</span>
+                      <span>Contém na Interação</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 px-1">
+                    {(config.keywordMatchType || 'exact') === 'exact'
+                      ? '⚡ O fluxo só roda se a mensagem do cliente for exatamente igual à palavra-chave.'
+                      : '🔍 O fluxo roda se a mensagem do cliente contiver a palavra-chave em qualquer parte da frase.'}
+                  </p>
+                </div>
+
+                <Input
+                  label="Palavras-chave (separadas por vírgula)"
+                  value={config.keywords || ''}
+                  onChange={(e) => handleConfigChange('keywords', e.target.value)}
+                  placeholder="Ex: preco, planos, ajuda, suporte, enxoval"
+                />
+              </div>
             )}
           </div>
         )}

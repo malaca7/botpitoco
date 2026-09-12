@@ -58,19 +58,19 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     steps:
-      - name: Wait for any pending Pages deployment to finish
+      - name: Clear and wait for pending Pages deployments
         run: |
-          echo "🔍 Verificando se há outro deployment do Pages em andamento..."
-          for i in {1..30}; do
-            STATUS=$(gh api "repos/${{ github.repository }}/pages/deployments" --jq '.[0].status' 2>/dev/null || echo "idle")
-            echo "Status atual do GitHub Pages: $STATUS (tentativa $i/30)"
-            if [ "$STATUS" != "in_progress" ] && [ "$STATUS" != "queued" ]; then
-              echo "✅ GitHub Pages livre para novo deployment."
-              break
+          echo "🔍 Verificando se há deployment anterior do Pages pendente..."
+          # Consultar status da API de deployments no ambiente github-pages
+          ACTIVE_DEP=$(gh api "repos/${{ github.repository }}/deployments?environment=github-pages&per_page=5" 2>/dev/null || echo "[]")
+          OLD_SHAS=$(echo "$ACTIVE_DEP" | jq -r '.[].sha' | grep -v "${{ github.sha }}" | head -n 3 || true)
+          for SHA in $OLD_SHAS; do
+            if [ -n "$SHA" ] && [ "$SHA" != "null" ]; then
+              echo "🧹 Limpando trava de deployment anterior para commit $SHA..."
+              gh api -X POST "repos/${{ github.repository }}/pages/deployments/$SHA/cancel" 2>/dev/null || true
             fi
-            echo "⏳ Aguardando deployment anterior finalizar (esperando 5s)..."
-            sleep 5
           done
+          sleep 3
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -79,12 +79,19 @@ jobs:
         continue-on-error: true
         uses: actions/deploy-pages@v4
 
-      - name: Wait and Retry Deploy if lock was busy
+      - name: Auto-recover and Retry Deploy if locked
         if: steps.deployment.outcome == 'failure'
         run: |
-          echo "⚠️ Conflito temporário detectado. Aguardando 15s para retry..."
-          sleep 15
+          echo "⚠️ Conflito ou trava detectada no Pages. Cancelando qualquer deployment pendente..."
+          ACTIVE_DEP=$(gh api "repos/${{ github.repository }}/deployments?environment=github-pages&per_page=5" 2>/dev/null || echo "[]")
+          for SHA in $(echo "$ACTIVE_DEP" | jq -r '.[].sha' | head -n 3); do
+            gh api -X POST "repos/${{ github.repository }}/pages/deployments/$SHA/cancel" 2>/dev/null || true
+          done
+          echo "⏳ Aguardando 10s para liberação definitiva do ambiente..."
+          sleep 10
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy to GitHub Pages (Retry)
         if: steps.deployment.outcome == 'failure'

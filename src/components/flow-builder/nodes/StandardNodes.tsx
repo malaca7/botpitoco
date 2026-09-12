@@ -10,6 +10,7 @@ export const TriggerNode: React.FC<NodeProps> = ({ id, selected, data }) => {
   const config = nodeData.config || {};
 
   const isKeyword = config.eventType === 'keyword';
+  const matchType = config.keywordMatchType || 'exact'; // 'exact' | 'contains'
   const keywordsList = (config.keywords || '')
     .split(',')
     .map((k: string) => k.trim())
@@ -33,12 +34,26 @@ export const TriggerNode: React.FC<NodeProps> = ({ id, selected, data }) => {
           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
             ⚡ {isKeyword ? 'Palavra-chave' : 'Mensagem Recebida'}
           </span>
-          <span className="text-[9px] text-slate-500 font-mono">WhatsApp</span>
+          {isKeyword ? (
+            <span
+              className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${
+                matchType === 'exact'
+                  ? 'bg-amber-950/90 text-amber-300 border border-amber-500/40'
+                  : 'bg-sky-950/90 text-sky-300 border border-sky-500/40'
+              }`}
+            >
+              {matchType === 'exact' ? '🎯 Exata' : '🔍 Contém'}
+            </span>
+          ) : (
+            <span className="text-[9px] text-slate-500 font-mono">WhatsApp</span>
+          )}
         </div>
 
         {isKeyword ? (
           <div className="space-y-1">
-            <span className="text-[10px] text-slate-400">Ativa quando conter:</span>
+            <span className="text-[10px] text-slate-400">
+              {matchType === 'exact' ? 'Ativa se a mensagem for exatamente:' : 'Ativa se a mensagem contiver:'}
+            </span>
             <div className="flex flex-wrap gap-1">
               {keywordsList.length > 0 ? (
                 keywordsList.map((kw: string, i: number) => (

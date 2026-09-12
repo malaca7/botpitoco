@@ -1464,34 +1464,80 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
       return kws.length > 0;
     });
 
-    for (const flow of keywordFlows) {
+    // Helper para descobrir se o fluxo é de correspondência 'exact' ou 'contains'
+    const getMatchType = (flow) => {
+      if (flow.keyword_match_type) return flow.keyword_match_type;
+      const flowNodes = allActiveNodes.filter(n => n.flow_id === flow.id);
+      const allNodes = [...flowNodes, ...(db.nodes?.[flow.id] || [])];
+      for (const n of allNodes) {
+        const nType = n.data?.nodeType || n.type || n.node_type;
+        if (nType === 'trigger') {
+          let nodeData = n.data;
+          if (typeof nodeData === 'string') {
+            try { nodeData = JSON.parse(nodeData); } catch {}
+          }
+          const cfg = nodeData?.config || n.config || {};
+          if (cfg.keywordMatchType) return cfg.keywordMatchType;
+        }
+      }
+      return 'exact'; // Padrão: específica / exata
+    };
+
+    // Separar em fluxos de correspondência exata (específica) e correspondência de contenção
+    const exactFlows = keywordFlows.filter(f => getMatchType(f) === 'exact');
+    const containsFlows = keywordFlows.filter(f => getMatchType(f) === 'contains');
+
+    // 1. Verificar primeiro fluxos com correspondência ESPECÍFICA (EXATA)
+    for (const flow of exactFlows) {
       const flowNodes = allActiveNodes.filter(n => n.flow_id === flow.id);
       const kws = extractFlowKeywords(flow, flowNodes, db.nodes?.[flow.id]);
 
       const matched = kws.some(kw => {
         if (!kw) return false;
-        // Bate exato
+        // Bate exatamente a mensagem do usuário (sem espaços extras/acentos)
         if (normIncoming === kw) return true;
-        // Se a palavra-chave tiver hashtag (ex: #enxoval), busca direta
-        if (kw.startsWith('#') && normIncoming.includes(kw)) return true;
-        // Se for número curto (ex: opção "1", "2") ou código
-        if (/^\d+$/.test(kw) && normIncoming === kw) return true;
-        // Busca por palavra inteira isolada com regex
-        try {
-          const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const wordRegex = new RegExp(`(^|\\s|[.,!?;])${escaped}(\\s|[.,!?;]|$)`, 'i');
-          if (wordRegex.test(normIncoming)) return true;
-        } catch {}
-        // Se a keyword tiver tamanho significativo (>= 3 letras), aceita substring
-        if (kw.length >= 3 && normIncoming.includes(kw)) return true;
+        // Se a palavra-chave tiver hashtag (ex: #enxoval), busca exata com/sem hashtag
+        if (kw.startsWith('#') && (normIncoming === kw || normIncoming === kw.slice(1))) return true;
         return false;
       });
 
       if (matched) {
         candidateFlow = flow;
         isKeywordMatch = true;
-        console.log(`[FlowRunner] 🎯 [PRIORIDADE PALAVRA-CHAVE] Mensagem "${incomingText}" ativou fluxo de palavra-chave: "${flow.name}" (${flow.id})`);
+        console.log(`[FlowRunner] 🎯 [PALAVRA-CHAVE ESPECÍFICA/EXATA] Mensagem "${incomingText}" ativou fluxo: "${flow.name}" (${flow.id})`);
         break;
+      }
+    }
+
+    // 2. Se nenhum fluxo exato bateu, verificar fluxos com correspondência CONTÉM NA INTERAÇÃO
+    if (!candidateFlow) {
+      for (const flow of containsFlows) {
+        const flowNodes = allActiveNodes.filter(n => n.flow_id === flow.id);
+        const kws = extractFlowKeywords(flow, flowNodes, db.nodes?.[flow.id]);
+
+        const matched = kws.some(kw => {
+          if (!kw) return false;
+          // Bate exato
+          if (normIncoming === kw) return true;
+          // Se a palavra-chave tiver hashtag (ex: #enxoval)
+          if (kw.startsWith('#') && normIncoming.includes(kw)) return true;
+          // Busca por palavra inteira com regex
+          try {
+            const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const wordRegex = new RegExp(`(^|\\s|[.,!?;])${escaped}(\\s|[.,!?;]|$)`, 'i');
+            if (wordRegex.test(normIncoming)) return true;
+          } catch {}
+          // Se a keyword tiver tamanho significativo (>= 3 letras), aceita contido na frase
+          if (kw.length >= 3 && normIncoming.includes(kw)) return true;
+          return false;
+        });
+
+        if (matched) {
+          candidateFlow = flow;
+          isKeywordMatch = true;
+          console.log(`[FlowRunner] 🔍 [PALAVRA-CHAVE CONTÉM NA FRASE] Mensagem "${incomingText}" ativou fluxo: "${flow.name}" (${flow.id})`);
+          break;
+        }
       }
     }
   }

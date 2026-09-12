@@ -333,6 +333,7 @@ export interface Flow {
   steps?: FlowStep[];
   color?: string; // Cor personalizada do fluxo (#10b981, #3b82f6, etc.)
   order_index?: number; // Ordem fixa personalizada (suporte a Drag & Drop)
+  keyword_match_type?: 'exact' | 'contains'; // 'exact' = Específica / Exata; 'contains' = Contém na interação
   created_at: string;
   updated_at: string;
 }
