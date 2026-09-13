@@ -134,28 +134,28 @@ export const App: React.FC = () => {
   let subtitle = 'Gestão centralizada da rede Pitoco de Gente';
   let pageContent = <AdminPage onNavigate={navigate} activeTabProp="dashboard" />;
 
-  if (pathname === '/admin' || pathname === '/dashboard') {
-    const tabParam = (searchParams.get('tab') || 'dashboard') as any;
+  if (pathname === '/admin' || pathname === '/dashboard' || pathname.startsWith('/admin/') || pathname.startsWith('/dashboard/')) {
+    const subTab = pathname.replace(/^\/(?:admin|dashboard)\/?/, '') || searchParams.get('tab') || 'dashboard';
     title = isCEO ? 'Painel Executivo CEO' : 'Painel Administrador Geral';
     subtitle = isCEO ? 'Métricas consolidadas da rede, robô e faturamento' : 'Controle global de módulos, produtos e atendimentos';
-    pageContent = <AdminPage onNavigate={navigate} activeTabProp={tabParam} />;
-  } else if (pathname === '/gerente' || pathname === '/gestao') {
+    pageContent = <AdminPage onNavigate={navigate} activeTabProp={subTab as any} />;
+  } else if (pathname === '/gerente' || pathname === '/gestao' || pathname.startsWith('/gerente/') || pathname.startsWith('/gestao/')) {
     title = 'Painel de Gestão da Filial';
     subtitle = 'Supervisão executiva, vendas da loja e fila de atendimento';
     pageContent = <ManagerPortalPage onNavigate={navigate} />;
-  } else if (pathname === '/catalogo' || pathname === '/produtos') {
+  } else if (pathname === '/catalogo' || pathname === '/produtos' || pathname.startsWith('/catalogo/') || pathname.startsWith('/produtos/')) {
     title = 'Catálogo de Produtos';
     subtitle = 'Gerenciamento completo de peças, tamanhos e preços';
     pageContent = <AdminPage onNavigate={navigate} activeTabProp="produtos" />;
-  } else if (pathname === '/bot_config' || pathname === '/robo') {
+  } else if (pathname === '/bot_config' || pathname === '/robo' || pathname.startsWith('/bot_config/') || pathname.startsWith('/robo/')) {
     title = 'Bot';
     subtitle = 'Chave PIX, fretes e mensagens automáticas do WhatsApp';
     pageContent = <AdminPage onNavigate={navigate} activeTabProp="bot_config" />;
-  } else if (pathname === '/clientes' || pathname === '/crm' || pathname === '/agendamentos' || pathname === '/consultorias') {
+  } else if (pathname === '/clientes' || pathname === '/crm' || pathname.startsWith('/clientes/') || pathname.startsWith('/crm/') || pathname === '/agendamentos' || pathname === '/consultorias') {
     title = 'Gestão de Clientes';
     subtitle = 'Cadastro, histórico, tags e gerenciamento de contatos da rede';
     pageContent = <ClientsPage onNavigate={navigate} />;
-  } else if (pathname === '/atendimento' || pathname === '/conversas') {
+  } else if (pathname === '/atendimento' || pathname === '/conversas' || pathname.startsWith('/atendimento/') || pathname.startsWith('/conversas/')) {
     title = 'Central de Atendimentos';
     subtitle = 'Atendimento em tempo real com direcionamento por loja e envio de catálogo';
     pageContent = (
@@ -164,7 +164,7 @@ export const App: React.FC = () => {
         onNavigate={navigate} 
       />
     );
-  } else if (pathname === '/lojas' || pathname === '/rede') {
+  } else if (pathname === '/lojas' || pathname === '/rede' || pathname.startsWith('/lojas/') || pathname.startsWith('/rede/')) {
     title = 'Central de Lojas';
     subtitle = 'Gestão centralizada das unidades Centro, Ipojuca e E-commerce';
     pageContent = <RedeLojasView onNavigate={navigate} />;
@@ -172,19 +172,19 @@ export const App: React.FC = () => {
     title = 'Fluxos';
     subtitle = 'Árvores de automação e nós de atendimento no WhatsApp';
     pageContent = <FlowBuilderView onNavigate={navigate} />;
-  } else if (pathname === '/whatsapp' || pathname === '/qrcode') {
+  } else if (pathname === '/whatsapp' || pathname === '/qrcode' || pathname.startsWith('/whatsapp/')) {
     title = 'Conexão WhatsApp Meta Cloud API';
     subtitle = 'Integração Oficial com a Meta WhatsApp Business Platform e Webhooks';
     pageContent = <WhatsappConnectView />;
-  } else if (pathname === '/acessos' || pathname === '/usuarios') {
+  } else if (pathname === '/acessos' || pathname === '/usuarios' || pathname.startsWith('/acessos/') || pathname.startsWith('/usuarios/')) {
     title = 'Gestão de Acessos';
     subtitle = 'Controle de painéis autorizados: Admin, Gerente e Atendimento';
     pageContent = <UsersPage />;
-  } else if (pathname === '/logs') {
+  } else if (pathname === '/logs' || pathname.startsWith('/logs/')) {
     title = 'Logs & Auditoria';
     subtitle = 'Histórico de eventos, transbordos e mensagens do sistema';
     pageContent = <LogsPage />;
-  } else if (pathname === '/configuracoes') {
+  } else if (pathname.startsWith('/configuracoes')) {
     title = 'Configurações';
     subtitle = 'Perfil da empresa, status de sincronização e credenciais';
     pageContent = <SettingsPage />;

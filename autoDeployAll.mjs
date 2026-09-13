@@ -30,7 +30,10 @@ const SPA_ROUTES = [
   'admin', 'gerente', 'gestao', 'atendimento', 'login', 'ceo',
   'lojas', 'fluxos', 'acessos', 'usuarios', 'whatsapp', 'catalogo',
   'enxoval', 'medidas', 'fila', 'conversas', 'clientes', 'dashboard',
-  'bot_config', 'configuracoes', 'logs'
+  'bot_config', 'configuracoes', 'logs',
+  'fluxos/id', 'atendimento/id', 'clientes/id', 'conversas/id',
+  'configuracoes/profile', 'configuracoes/company', 'configuracoes/variables', 'configuracoes/theme', 'configuracoes/whatsapp_qr',
+  'admin/dashboard', 'admin/produtos', 'admin/bot_config', 'admin/lojas'
 ];
 
 async function main() {

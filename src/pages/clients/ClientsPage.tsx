@@ -54,8 +54,20 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
   const [agendaSettings, setAgendaSettings] = useState<AgendaSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Extração amigável do ID do cliente: /clientes/id/:clientId ou legado ?clientId=...
+  const getClientIdFromUrl = (): string => {
+    if (typeof window === 'undefined') return '';
+    const path = window.location.pathname;
+    const match = path.match(/\/(?:clientes|crm)\/id\/([^\/?#]+)/i);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]);
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get('clientId') || params.get('id') || '';
+  };
+
   const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const initialClientIdFromUrl = queryParams?.get('clientId') || queryParams?.get('id') || '';
+  const initialClientIdFromUrl = getClientIdFromUrl();
   const initialViewMode = (queryParams?.get('view') === 'table' ? 'table' : 'cards') as 'cards' | 'table';
   const initialSearch = queryParams?.get('busca') || queryParams?.get('q') || '';
 
@@ -71,7 +83,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
   const handleOpenDrawer = (client: Contact) => {
     setSelectedClientForDrawer(client);
     if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', `/clientes?clientId=${encodeURIComponent(client.id)}`);
+      window.history.pushState({}, '', `/clientes/id/${encodeURIComponent(client.id)}`);
     }
   };
 
@@ -167,6 +179,23 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
 
   // Update selected client in drawer if clients state changes or from URL
   useEffect(() => {
+    // Normalizar URL legada (?clientId=...) para URL amigável (/clientes/id/...)
+    const queryId = new URLSearchParams(window.location.search).get('clientId') || new URLSearchParams(window.location.search).get('id');
+    if (queryId && !window.location.pathname.includes('/clientes/id/')) {
+      window.history.replaceState({}, '', `/clientes/id/${encodeURIComponent(queryId)}`);
+    }
+
+    const handlePopState = () => {
+      const cId = getClientIdFromUrl();
+      if (cId) {
+        const found = clients.find(c => c.id === cId || c.phone === cId);
+        if (found) setSelectedClientForDrawer(found);
+      } else {
+        setSelectedClientForDrawer(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+
     if (selectedClientForDrawer) {
       const fresh = clients.find(c => c.id === selectedClientForDrawer.id || c.phone === selectedClientForDrawer.phone);
       if (fresh) setSelectedClientForDrawer(fresh);
@@ -174,6 +203,8 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
       const matched = clients.find(c => c.id === initialClientIdFromUrl || c.phone === initialClientIdFromUrl);
       if (matched) setSelectedClientForDrawer(matched);
     }
+
+    return () => window.removeEventListener('popstate', handlePopState);
   }, [clients, initialClientIdFromUrl]);
 
   // Phone match helper

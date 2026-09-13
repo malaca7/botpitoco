@@ -197,6 +197,18 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
     loadInitialData();
   }, []);
 
+  // Extração amigável do ID da conversa: /atendimento/id/:convId ou legado ?convId=...
+  const getConvIdFromUrl = (): string => {
+    if (typeof window === 'undefined') return '';
+    const path = window.location.pathname;
+    const match = path.match(/\/(?:atendimento|conversas)\/id\/([^\/?#]+)/i);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]);
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get('convId') || params.get('id') || '';
+  };
+
   // Carregar conversas com filtro de loja
   const fetchConversations = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -205,8 +217,7 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
       const data = await StorageService.getConversations(filter);
       setConversations(data);
       if (!activeConv && data.length > 0) {
-        const qp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-        const targetConvId = qp?.get('convId') || qp?.get('id');
+        const targetConvId = getConvIdFromUrl();
         const matched = targetConvId ? data.find(c => c.id === targetConvId || c.phone === targetConvId || `conv-${c.phone}` === targetConvId) : null;
         const firstValid = matched || data.find(c => !c.is_deleted) || data[0];
         setActiveConv(firstValid);
@@ -221,7 +232,8 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
   const handleSelectConv = (conv: Conversation) => {
     setActiveConv(conv);
     if (typeof window !== 'undefined') {
-      const url = `/atendimento?convId=${encodeURIComponent(conv.id)}${statusFilter !== 'all' ? `&filter=${encodeURIComponent(statusFilter)}` : ''}`;
+      const filterQuery = statusFilter !== 'all' ? `?filter=${encodeURIComponent(statusFilter)}` : '';
+      const url = `/atendimento/id/${encodeURIComponent(conv.id)}${filterQuery}`;
       window.history.replaceState({}, '', url);
     }
   };
@@ -229,9 +241,9 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
   const handleStatusFilterChange = (newFilter: string) => {
     setStatusFilter(newFilter);
     if (typeof window !== 'undefined') {
-      const convParam = activeConv ? `convId=${encodeURIComponent(activeConv.id)}&` : '';
-      const url = `/atendimento?${convParam}filter=${encodeURIComponent(newFilter)}`;
-      window.history.replaceState({}, '', url);
+      const base = activeConv ? `/atendimento/id/${encodeURIComponent(activeConv.id)}` : '/atendimento';
+      const filterQuery = newFilter !== 'all' ? `?filter=${encodeURIComponent(newFilter)}` : '';
+      window.history.replaceState({}, '', `${base}${filterQuery}`);
     }
   };
 
@@ -240,6 +252,26 @@ export const AtendimentoHumanoInbox: React.FC<AtendimentoHumanoInboxProps> = ({
     const interval = setInterval(() => fetchConversations(true), 4000);
     return () => clearInterval(interval);
   }, [fetchConversations]);
+
+  // Sincronização e normalização de URL com histórico (popstate)
+  useEffect(() => {
+    const queryConvId = new URLSearchParams(window.location.search).get('convId') || new URLSearchParams(window.location.search).get('id');
+    if (queryConvId && !window.location.pathname.includes('/atendimento/id/')) {
+      const filterParam = new URLSearchParams(window.location.search).get('filter');
+      const filterQuery = filterParam && filterParam !== 'all' ? `?filter=${encodeURIComponent(filterParam)}` : '';
+      window.history.replaceState({}, '', `/atendimento/id/${encodeURIComponent(queryConvId)}${filterQuery}`);
+    }
+
+    const handlePopState = () => {
+      const cId = getConvIdFromUrl();
+      if (cId) {
+        const found = conversations.find(c => c.id === cId || c.phone === cId || `conv-${c.phone}` === cId);
+        if (found) setActiveConv(found);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [conversations]);
 
   // Carregar mensagens e contato da conversa selecionada
   useEffect(() => {

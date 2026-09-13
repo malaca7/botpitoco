@@ -61,23 +61,38 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Modo de visualização: 'list' (gerenciador tradicional) ou 'studio' (Studio Visual)
-  const initialFlowIdFromUrl = typeof window !== 'undefined'
-    ? (new URLSearchParams(window.location.search).get('flowId') || new URLSearchParams(window.location.search).get('id') || '')
-    : '';
+  // Extração amigável do ID do fluxo: /fluxos/id/:flowId ou legado ?flowId=...
+  const getFlowIdFromUrl = (): string => {
+    if (typeof window === 'undefined') return '';
+    const path = window.location.pathname;
+    const match = path.match(/\/fluxos\/id\/([^\/?#]+)/i);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]);
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get('flowId') || params.get('id') || '';
+  };
+
+  const initialFlowIdFromUrl = getFlowIdFromUrl();
 
   const [viewMode, setViewMode] = useState<'list' | 'studio'>(initialFlowIdFromUrl ? 'studio' : 'list');
   const [studioFlowId, setStudioFlowId] = useState<string>(initialFlowIdFromUrl);
 
   useEffect(() => {
+    // Normalizar URL legada (?flowId=...) para URL amigável (/fluxos/id/...)
+    const queryFlowId = new URLSearchParams(window.location.search).get('flowId') || new URLSearchParams(window.location.search).get('id');
+    if (queryFlowId && !window.location.pathname.includes('/fluxos/id/')) {
+      window.history.replaceState({}, '', `/fluxos/id/${encodeURIComponent(queryFlowId)}`);
+    }
+
     const handlePopState = () => {
-      const p = new URLSearchParams(window.location.search);
-      const fId = p.get('flowId') || p.get('id');
+      const fId = getFlowIdFromUrl();
       if (fId) {
         setStudioFlowId(fId);
         setViewMode('studio');
       } else {
         setViewMode('list');
+        setStudioFlowId('');
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -505,11 +520,11 @@ export const FlowBuilderView: React.FC<FlowBuilderViewProps> = ({ onNavigate }) 
 
   // Abrir Visual Studio N8N / BotGhost
   const handleOpenStudio = (flowId?: string) => {
-    const targetId = flowId || selectedFlowForSteps?.id || flows[0]?.id || 'flow-principal-pitoco';
+    const targetId = flowId || selectedFlowForSteps?.id || flows[0]?.id || 'flow-pitoco-001';
     setStudioFlowId(targetId);
     setViewMode('studio');
     if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', `/fluxos?flowId=${encodeURIComponent(targetId)}`);
+      window.history.pushState({}, '', `/fluxos/id/${encodeURIComponent(targetId)}`);
     }
   };
 

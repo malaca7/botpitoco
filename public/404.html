@@ -5,9 +5,9 @@
     <title>Pitoco de Gente</title>
     <script type="text/javascript">
       // GitHub Pages SPA Redirect Encoder
-      // Preserva rotas amigáveis e query parameters (/fluxos?flowId=..., /atendimento?convId=...)
-      var pathSegmentsToKeep = 0;
+      // Preserva rotas amigáveis (/fluxos/id/flow-..., /atendimento/id/conv-..., /configuracoes/...)
       var l = window.location;
+      var pathSegmentsToKeep = (l.hostname.includes('github.io') && l.pathname.startsWith('/7assistente')) ? 1 : 0;
       l.replace(
         l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
         l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +

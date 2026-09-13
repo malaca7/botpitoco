@@ -186,22 +186,37 @@ export const SettingsPage: React.FC = () => {
     currentUserIdentifier 
   } = useTheme();
 
-  // Aba inicial lida da URL (?tab=...) ou 'profile' padrão
-  const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const initialTabFromUrl = queryParams?.get('tab') || 'profile';
+  // Extração amigável da aba: /configuracoes/:tab ou legado ?tab=...
+  const getTabFromUrl = (): string => {
+    if (typeof window === 'undefined') return 'profile';
+    const path = window.location.pathname;
+    const match = path.match(/\/configuracoes\/([a-zA-Z0-9_\-]+)/i);
+    if (match && match[1]) {
+      return match[1];
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get('tab') || 'profile';
+  };
+
+  const initialTabFromUrl = getTabFromUrl();
   const [activeTab, setActiveTab] = useState<string>(initialTabFromUrl);
 
   const handleTabChange = (newTab: string) => {
     setActiveTab(newTab);
     if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', `/configuracoes?tab=${newTab}`);
+      window.history.pushState({}, '', `/configuracoes/${newTab}`);
     }
   };
 
   useEffect(() => {
+    // Normalizar URL legada (?tab=...) para URL amigável (/configuracoes/:tab)
+    const queryTab = new URLSearchParams(window.location.search).get('tab');
+    if (queryTab && !window.location.pathname.includes(`/configuracoes/${queryTab}`)) {
+      window.history.replaceState({}, '', `/configuracoes/${queryTab}`);
+    }
+
     const handlePopState = () => {
-      const q = new URLSearchParams(window.location.search);
-      const t = q.get('tab');
+      const t = getTabFromUrl();
       if (t) setActiveTab(t);
     };
     window.addEventListener('popstate', handlePopState);

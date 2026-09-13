@@ -35,6 +35,7 @@ import { BaseNode } from './BaseNode';
 import { FlowNodeData, Store as StoreType } from '../../../types';
 import { VariableBadge } from '../ui/VariableBadge';
 import { StorageService } from '../../../lib/storage';
+import { cn } from '../../../lib/utils';
 
 export const ConditionNode: React.FC<NodeProps> = ({ id, selected, data }) => {
   const nodeData = data as unknown as FlowNodeData;
