@@ -19,7 +19,9 @@ import {
   List,
   Maximize2,
   Minimize2,
-  Braces
+  Braces,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -50,6 +52,9 @@ export interface FlowToolbarProps {
   onChangeEdgeType: (type: 'smoothstep' | 'default' | 'straight' | 'step') => void;
   onOpenShortcuts: () => void;
   onAutoLayout?: () => void;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onFitView?: () => void;
 }
 
 export const FlowToolbar: React.FC<FlowToolbarProps> = ({
@@ -77,6 +82,9 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
   onChangeEdgeType,
   onOpenShortcuts,
   onAutoLayout,
+  onZoomIn,
+  onZoomOut,
+  onFitView,
 }) => {
   const [isAutoSaveMenuOpen, setIsAutoSaveMenuOpen] = useState(false);
   const [isLinesMenuOpen, setIsLinesMenuOpen] = useState(false);
@@ -279,6 +287,43 @@ export const FlowToolbar: React.FC<FlowToolbarProps> = ({
             <RotateCw className="w-3.5 h-3.5" />
           </button>
         </div>
+
+        {/* Zoom Controls */}
+        {(onZoomIn || onZoomOut || onFitView) && (
+          <div className="hidden lg:flex items-center gap-0.5 px-1 py-0.5 rounded-xl bg-dark-850 border border-white/10 shadow-xs">
+            {onZoomOut && (
+              <button
+                type="button"
+                onClick={onZoomOut}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Reduzir Zoom (-)"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {onFitView && (
+              <button
+                type="button"
+                onClick={onFitView}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1"
+                title="Ajustar e Enquadrar Todo o Fluxo na Tela"
+              >
+                <Maximize2 className="w-3 h-3 text-sky-400" />
+                <span className="hidden xl:inline">Enquadrar</span>
+              </button>
+            )}
+            {onZoomIn && (
+              <button
+                type="button"
+                onClick={onZoomIn}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Aumentar Zoom (+)"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Auto-Organize Flow Button */}
         {onAutoLayout && (

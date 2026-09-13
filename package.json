@@ -19,7 +19,9 @@
     "deploy:bot": "node deployDiscloud.mjs"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
     "@supabase/supabase-js": "^2.115.0",
+    "@types/dagre": "^0.7.54",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "@xyflow/react": "^12.11.5",
     "clsx": "^2.1.1",
