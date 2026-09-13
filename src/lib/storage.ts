@@ -51,6 +51,51 @@ import { getWhatsAppBackendUrl } from './whatsappService';
 
 export const getBackendUrl = getWhatsAppBackendUrl;
 
+export function isTestOrDummy(phone?: string, name?: string): boolean {
+  if (!phone && !name) return false;
+  const cleanPhone = String(phone || '').replace(/\D/g, '');
+  const cleanName = String(name || '').toLowerCase().trim();
+
+  if (
+    cleanName.includes('teste') ||
+    cleanName.includes('test') ||
+    cleanName.includes('dummy') ||
+    cleanName.includes('mock') ||
+    cleanName.includes('exemplo')
+  ) {
+    return true;
+  }
+
+  // Padrões de repetição ou números conhecidos de teste
+  if (/(.)\1{4,}/.test(cleanPhone)) return true;
+  if (
+    cleanPhone.startsWith('558199999') ||
+    cleanPhone.startsWith('558188888') ||
+    cleanPhone.startsWith('558197777') ||
+    cleanPhone.startsWith('551199999') ||
+    cleanPhone.startsWith('551188888') ||
+    cleanPhone.startsWith('551177777')
+  ) {
+    return true;
+  }
+  if ([
+    '5581911112222',
+    '558199999999',
+    '5581988887777',
+    '5581999998888',
+    '5581977776666',
+    '5581999990099',
+    '5581888880001',
+    '81999999999',
+    '81900000003',
+    '81991234567'
+  ].includes(cleanPhone)) {
+    return true;
+  }
+  if (cleanPhone.length > 0 && cleanPhone.length < 10) return true;
+  return false;
+}
+
 const API_BASE = 
   (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_BOT_URL) ||
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_URL) ||
@@ -423,6 +468,7 @@ export const StorageService = {
       if (c.id && (c.id.includes('1686') || c.id.includes('219') || c.id.length >= 19)) return false;
       const name = (c.contact_name || '').toLowerCase().trim();
       if (name === 'pitoco bot' || name === 'bot') return false;
+      if (isTestOrDummy(c.contact_phone || c.phone, c.contact_name)) return false;
       return true;
     };
 
@@ -790,7 +836,7 @@ export const StorageService = {
       try {
         const dbClients = await SupabaseService.getClients(storeId);
         if (Array.isArray(dbClients)) {
-          const cleanClients = dbClients.filter(c => !isLid(c.phone) && !isBot(c.name));
+          const cleanClients = dbClients.filter(c => !isLid(c.phone) && !isBot(c.name) && !isTestOrDummy(c.phone, c.name));
           setItem(STORAGE_KEYS.CONTACTS, cleanClients);
           return cleanClients;
         }
@@ -806,7 +852,7 @@ export const StorageService = {
       if (res && res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          const cleanClients = data.filter((c: any) => !isLid(c.phone) && !isBot(c.name));
+          const cleanClients = data.filter((c: any) => !isLid(c.phone) && !isBot(c.name) && !isTestOrDummy(c.phone, c.name));
           setItem(STORAGE_KEYS.CONTACTS, cleanClients);
           return cleanClients;
         }
@@ -819,6 +865,7 @@ export const StorageService = {
       contacts = contacts.filter(c => {
         if (isLid(c.phone)) return false;
         if (isBot(c.name)) return false;
+        if (isTestOrDummy(c.phone, c.name)) return false;
         return !storeId || !c.store_id || c.store_id === storeId;
       });
     }
@@ -827,8 +874,8 @@ export const StorageService = {
 
   async saveContact(contact: Partial<Contact>): Promise<Contact> {
     const cleanPhone = String(contact.phone || '').replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length >= 14 || cleanPhone.startsWith('1686') || cleanPhone.startsWith('219')) {
-      console.warn('[Storage] Ignorando salvamento de WhatsApp LID no CRM:', cleanPhone);
+    if (!cleanPhone || cleanPhone.length >= 14 || cleanPhone.startsWith('1686') || cleanPhone.startsWith('219') || isTestOrDummy(cleanPhone, contact.name)) {
+      console.warn('[Storage] Ignorando salvamento de contato inválido/teste no CRM:', cleanPhone, contact.name);
       return contact as Contact;
     }
 
@@ -963,24 +1010,7 @@ export const StorageService = {
       }
     } catch {}
 
-    let list = getItem<VIPConsultation[]>(STORAGE_KEYS.VIP_CONSULTATIONS, [
-      {
-        id: 'cons-1',
-        store_id: 'store-001',
-        store_name: 'Loja Matriz — Centro',
-        client_name: 'Juliana Paes (Mamãe do Bento)',
-        client_phone: '81992223344',
-        consultation_type: 'presencial_loja',
-        consultation_date: '2026-09-12',
-        consultation_time: '15:00',
-        due_date: '2026-11-20',
-        baby_gender: 'menino',
-        status: 'confirmed',
-        consultant_name: 'Sofia Consultora VIP',
-        notes: 'Interesse em Saída de Maternidade Verde Menta e Kit Berço 400 fios',
-        created_at: new Date().toISOString(),
-      }
-    ]);
+    let list = getItem<VIPConsultation[]>(STORAGE_KEYS.VIP_CONSULTATIONS, []);
     if (storeId) {
       list = list.filter(c => c.store_id === storeId);
     }

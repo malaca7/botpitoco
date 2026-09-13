@@ -36,7 +36,8 @@ import {
   cleanButtonTitle,
   resolveLinkedPhones,
   syncContactToSupabase,
-  recordRealMessage
+  recordRealMessage,
+  isTestOrDummy
 } from './flowRunner.mjs';
 import { processAdminBotMessage } from './botEngine.mjs';
 import { syncToSupabase } from './syncSupabase.mjs';
@@ -1266,12 +1267,13 @@ app.get('/api/contacts', async (req, res) => {
         }
         const { data, error } = await query;
         if (!error && Array.isArray(data)) {
-          // Filtrar WhatsApp LIDs (>= 14 dígitos ou começando com 1686 / 219) e nomes do bot
+          // Filtrar WhatsApp LIDs (>= 14 dígitos ou começando com 1686 / 219), nomes do bot e dados de teste
           const validClients = data.filter(c => {
             const p = String(c.phone || '').replace(/\D/g, '');
             if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) return false;
             const name = (c.name || '').toLowerCase().trim();
             if (name === 'pitoco bot' || name === 'bot') return false;
+            if (isTestOrDummy(p, name)) return false;
             return true;
           });
           // Atualizar cache local do db.contacts para refletir a nuvem
@@ -1301,6 +1303,7 @@ app.get('/api/contacts', async (req, res) => {
       if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) return false;
       const name = (c.name || '').toLowerCase().trim();
       if (name === 'pitoco bot' || name === 'bot') return false;
+      if (isTestOrDummy(p, name)) return false;
       return true;
     });
 
@@ -1324,6 +1327,9 @@ app.post('/api/contacts', async (req, res) => {
     const cleanPhone = String(data.phone || '').replace(/\D/g, '');
     if (!cleanPhone) {
       return res.status(400).json({ error: 'Telefone do contato é obrigatório' });
+    }
+    if (isTestOrDummy(cleanPhone, data.name)) {
+      return res.status(400).json({ error: 'Cadastro de contatos ou números de teste não é permitido.' });
     }
 
     const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
@@ -1402,6 +1408,9 @@ app.put('/api/contacts/:id', async (req, res) => {
 
     const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
     const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
+    if (isTestOrDummy(targetPhone, data.name)) {
+      return res.status(400).json({ error: 'Atualização para dados ou números de teste não é permitida.' });
+    }
     const isTargetLid = targetPhone.length >= 14 || targetPhone.startsWith('1686') || targetPhone.startsWith('219');
     let updatedContact = null;
 
@@ -1710,13 +1719,14 @@ app.get('/api/conversations', (req, res) => {
     const db = loadDb();
     let convs = Object.values(db.conversations || {});
 
-    // 🛡️ FILTRO RIGOROSO: NUNCA retornar conversas com WhatsApp LID ou do próprio robô
+    // 🛡️ FILTRO RIGOROSO: NUNCA retornar conversas com WhatsApp LID, bot ou contatos de teste
     convs = convs.filter(c => {
       const p = String(c.contact_phone || c.phone || '').replace(/\D/g, '');
       if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) return false;
       if (c.id && (c.id.includes('1686') || c.id.includes('219') || c.id.length >= 19)) return false;
       const name = (c.contact_name || '').toLowerCase().trim();
       if (name === 'pitoco bot' || name === 'bot') return false;
+      if (isTestOrDummy(p, name)) return false;
       return true;
     });
 
@@ -1734,6 +1744,9 @@ app.post('/api/conversations', (req, res) => {
     const db = loadDb();
     if (!db.conversations) db.conversations = {};
     const convData = req.body;
+    if (isTestOrDummy(convData.contact_phone || convData.phone, convData.contact_name)) {
+      return res.status(400).json({ error: 'Criação de conversas de teste não é permitida.' });
+    }
     const id = convData.id || `conv-${Date.now()}`;
     const newConv = {
       id,
@@ -1930,7 +1943,7 @@ app.patch('/api/conversations/:id/assign', async (req, res) => {
       const convObj = db.conversations[convKey];
       const sRes = await safeSupa(supabaseServer.from('conversations').upsert({
         id: convObj.id || convKey,
-        phone: convObj.phone || convObj.contact_phone || cleanId || '558199999999',
+        phone: convObj.phone || convObj.contact_phone || cleanId || '',
         client_name: convObj.contact_name || 'Cliente WhatsApp',
         assigned_to: finalAttendant,
         status: 'human',
@@ -1996,7 +2009,7 @@ app.patch('/api/conversations/:id/status', async (req, res) => {
       const convObj = db.conversations[convKey];
       const sRes = await safeSupa(supabaseServer.from('conversations').upsert({
         id: convObj.id || convKey,
-        phone: convObj.phone || convObj.contact_phone || cleanId || '558199999999',
+        phone: convObj.phone || convObj.contact_phone || cleanId || '',
         client_name: convObj.contact_name || 'Cliente WhatsApp',
         status: db.conversations[convKey].status,
         assigned_to: db.conversations[convKey].assigned_to || null,
@@ -2304,7 +2317,7 @@ app.post('/api/flows/test-execution', async (req, res) => {
     const testName = name || 'Cliente Teste';
     const testText = message || 'oi';
 
-    const replies = await executePublishedFlow(`${testPhone}@s.whatsapp.net`, testText, testName, testPhone);
+    const replies = await executePublishedFlow(`${testPhone}@s.whatsapp.net`, testText, testName, testPhone, null, true);
     res.json({ success: true, input: testText, phone: testPhone, replies });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

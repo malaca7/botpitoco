@@ -915,8 +915,56 @@ export function executeVariableAssignment(assignment, variables, contact = {}, b
   }
 }
 
+export function isTestOrDummy(phone, name) {
+  if (!phone && !name) return false;
+  const cleanPhone = String(phone || '').replace(/\D/g, '');
+  const cleanName = String(name || '').toLowerCase().trim();
+
+  if (
+    cleanName.includes('teste') ||
+    cleanName.includes('test') ||
+    cleanName.includes('dummy') ||
+    cleanName.includes('mock') ||
+    cleanName.includes('exemplo')
+  ) {
+    return true;
+  }
+
+  // Padrões de repetição ou números conhecidos de teste
+  if (/(.)\1{4,}/.test(cleanPhone)) return true;
+  if (
+    cleanPhone.startsWith('558199999') ||
+    cleanPhone.startsWith('558188888') ||
+    cleanPhone.startsWith('558197777') ||
+    cleanPhone.startsWith('551199999') ||
+    cleanPhone.startsWith('551188888') ||
+    cleanPhone.startsWith('551177777')
+  ) {
+    return true;
+  }
+  if ([
+    '5581911112222',
+    '558199999999',
+    '5581988887777',
+    '5581999998888',
+    '5581977776666',
+    '5581999990099',
+    '5581888880001',
+    '81999999999',
+    '81900000003',
+    '81991234567'
+  ].includes(cleanPhone)) {
+    return true;
+  }
+  if (cleanPhone.length > 0 && cleanPhone.length < 10) return true;
+  return false;
+}
+
 // Record an incoming or outgoing message into real database
 export function recordRealMessage(phone, senderName, direction, content, explicitTags = null, profilePicUrl = null) {
+  if (isTestOrDummy(phone, senderName)) {
+    return { contact: null, conversation: null, message: null };
+  }
   const db = loadDb();
   const cleanPhone = phone.replace(/\D/g, '');
   const { primaryPhone } = resolveLinkedPhones(cleanPhone, db);
@@ -1836,15 +1884,18 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
 }
 
 // Execute published flow
-export async function executePublishedFlow(senderJid, messageText, pushName, realPhoneNumber = null, profilePicUrl = null) {
+export async function executePublishedFlow(senderJid, messageText, pushName, realPhoneNumber = null, profilePicUrl = null, isSimulation = false) {
   const db = loadDb();
   const rawId = senderJid.split('@')[0].split(':')[0];
   const cleanPhone = (realPhoneNumber || rawId).replace(/\D/g, '');
   const senderName = pushName || 'Cliente';
   const cleanInput = (messageText || '').trim();
+  const isSim = Boolean(isSimulation || isTestOrDummy(cleanPhone, senderName));
 
-  // Record incoming message in real database
-  recordRealMessage(cleanPhone, senderName, 'inbound', cleanInput, null, profilePicUrl);
+  // Record incoming message in real database (apenas para atendimentos reais)
+  if (!isSim) {
+    recordRealMessage(cleanPhone, senderName, 'inbound', cleanInput, null, profilePicUrl);
+  }
 
   const convId = `conv-${cleanPhone}`;
   const currentConv = db.conversations?.[convId] || Object.values(db.conversations || {}).find(c => 
@@ -2116,7 +2167,7 @@ function parseCustomDateString(input) {
         if (!db.contacts) db.contacts = {};
         const isTargetLid = targetPhone.length >= 14 || targetPhone.startsWith('1686') || targetPhone.startsWith('219');
 
-        if (!isTargetLid) {
+        if (!isTargetLid && !isSim && !isTestOrDummy(targetPhone, extractedName)) {
           if (!db.contacts[targetPhone]) {
             db.contacts[targetPhone] = {
               id: `contact-${targetPhone}`,
@@ -2722,7 +2773,7 @@ function parseCustomDateString(input) {
       let savedContact = null;
       const isTargetLid = targetPhone.length >= 14 || targetPhone.startsWith('1686') || targetPhone.startsWith('219');
 
-      if (!isTargetLid) {
+      if (!isTargetLid && !isSim && !isTestOrDummy(targetPhone, resolvedName)) {
         const existing = (typeof db.contacts === 'object' && !Array.isArray(db.contacts)) ? (db.contacts[targetPhone] || {}) : {};
         const contactObj = {
           id: existing.id || `contact-${targetPhone}`,
@@ -3760,16 +3811,18 @@ function parseCustomDateString(input) {
     break;
   }
 
-  // Save session in DB across all linked phones
-  if (!db.sessions) db.sessions = {};
-  for (const p of [targetPhone, cleanPhone, rawId, ...allPhones]) {
-    db.sessions[p] = session;
-  }
-  saveDb(db);
+  // Save session in DB across all linked phones (apenas para atendimentos reais)
+  if (!isSim) {
+    if (!db.sessions) db.sessions = {};
+    for (const p of [targetPhone, cleanPhone, rawId, ...allPhones]) {
+      db.sessions[p] = session;
+    }
+    saveDb(db);
 
-  // Record all outbound replies
-  for (const rep of replies) {
-    recordRealMessage(cleanPhone, senderName, 'outbound', rep);
+    // Record all outbound replies
+    for (const rep of replies) {
+      recordRealMessage(cleanPhone, senderName, 'outbound', rep);
+    }
   }
 
   return replies.length > 0 ? replies : [`Mensagem processada pelo fluxo *${publishedFlow.name}*!`];
