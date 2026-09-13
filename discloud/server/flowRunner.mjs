@@ -1217,6 +1217,9 @@ export async function findRegisteredContact(cleanPhone, senderName, db, checkCri
       cleanName && 
       cleanName.toLowerCase() !== 'cliente' && 
       cleanName.toLowerCase() !== 'cliente whatsapp' && 
+      cleanName.toLowerCase() !== 'cliente pitoco' && 
+      cleanName.toLowerCase() !== 'novo cliente' && 
+      cleanName.toLowerCase() !== 'cliente novo' && 
       cleanName.toLowerCase() !== 'nome_cliente' && 
       cleanName.toLowerCase() !== 'undefined' && 
       cleanName.toLowerCase() !== 'null' && 
@@ -1484,7 +1487,7 @@ export function extractFlowKeywords(flow, flowNodes = [], dbNodes = []) {
 }
 
 // Obter dinamicamente os fluxos e nós publicados diretamente do Supabase em tempo real
-export async function getActiveFlowAndGraph(db, preferredFlowId = null, incomingText = '', isWaitingForInput = false) {
+export async function getActiveFlowAndGraph(db, preferredFlowId = null, incomingText = '', isFlowInProgress = false) {
   let activeFlows = [];
 
   // 1. Consultar diretamente TODOS os fluxos com status ATIVO no Supabase
@@ -1578,6 +1581,55 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
           if (!allActiveEdges.some(e => e.id === le.id)) allActiveEdges.push({ ...le, flow_id: fId });
         }
       }
+    }
+  }
+
+  // =========================================================================
+  // 🔒 REGRA FUNDAMENTAL: SE JÁ HÁ UM FLUXO EM ANDAMENTO, NUNCA ACIONAR OUTRO!
+  // Somente acionar outro fluxo quando finalizar o que está rodando atualmente.
+  // =========================================================================
+  if (isFlowInProgress && preferredFlowId) {
+    const activeRunningFlow = activeFlows.find(f => f.id === preferredFlowId);
+    if (activeRunningFlow) {
+      console.log(`[FlowRunner] 🔒 [FLUXO EM ANDAMENTO BLOQUEADO] Mantendo fluxo atual "${activeRunningFlow.name}" (${activeRunningFlow.id}). Nenhuma troca de fluxo é permitida até a sua conclusão.`);
+      
+      const flowId = activeRunningFlow.id;
+      let nodes = [];
+      let edges = [];
+
+      const rawFlowNodes = allActiveNodes.filter(n => n.flow_id === flowId);
+      const rawFlowEdges = allActiveEdges.filter(e => e.flow_id === flowId);
+
+      if (rawFlowNodes.length > 0) {
+        nodes = rawFlowNodes.map((d) => ({
+          id: d.id,
+          flow_id: d.flow_id,
+          type: d.type || d.node_type || 'message',
+          position: d.position || { x: Number(d.position_x || 0), y: Number(d.position_y || 0) },
+          data: typeof d.data === 'string' ? JSON.parse(d.data) : (d.data || { label: d.label, nodeType: d.type, config: {} }),
+        }));
+        if (!db.nodes) db.nodes = {};
+        db.nodes[flowId] = nodes;
+      }
+
+      if (rawFlowEdges.length > 0) {
+        edges = rawFlowEdges.map((e) => ({
+          id: e.id,
+          flow_id: e.flow_id,
+          source: e.source || e.source_node_id,
+          target: e.target || e.target_node_id,
+          sourceHandle: e.source_handle || e.sourceHandle,
+          targetHandle: e.target_handle || e.targetHandle,
+          data: typeof e.data === 'string' ? JSON.parse(e.data) : (e.data || e.condition || {}),
+        }));
+        if (!db.edges) db.edges = {};
+        db.edges[flowId] = edges;
+      }
+
+      if (nodes.length === 0 && db.nodes?.[flowId]) nodes = db.nodes[flowId];
+      if (edges.length === 0 && db.edges?.[flowId]) edges = db.edges[flowId];
+
+      return { publishedFlow: activeRunningFlow, nodes, edges, isKeywordMatch: false };
     }
   }
 
@@ -1677,12 +1729,12 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
     }
   }
 
-  // B) Se NÃO bateu palavra-chave, mas o usuário está no meio de uma pergunta/input de fluxo anterior:
-  if (!candidateFlow && isWaitingForInput && preferredFlowId) {
+  // B) Se NÃO bateu palavra-chave, mas o usuário está no meio de um fluxo ativo:
+  if (!candidateFlow && isFlowInProgress && preferredFlowId) {
     const prefFlow = activeFlows.find(f => f.id === preferredFlowId);
     if (prefFlow) {
       candidateFlow = prefFlow;
-      console.log(`[FlowRunner] 💬 [INPUT EM ANDAMENTO] Mantendo fluxo ativo "${prefFlow.name}" (${prefFlow.id}) para captura de resposta.`);
+      console.log(`[FlowRunner] 💬 [FLUXO EM ANDAMENTO] Mantendo fluxo ativo "${prefFlow.name}" (${prefFlow.id}) para captura de resposta.`);
     }
   }
 
@@ -1772,38 +1824,68 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
     String(c?.phone || c?.contact_phone || '').replace(/\D/g, '') === cleanPhone
   );
 
-  // Obter sessão atual para preservar fluxo em andamento se estiver aguardando resposta
-  const existingSession = db.sessions?.[cleanPhone] || db.sessions?.[rawId];
+  const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
+  const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
+
+  // 1. Obter sessão atual buscando em todas as chaves vinculadas (telefone real, LID, rawId)
+  let existingSession = null;
+  for (const p of [targetPhone, cleanPhone, rawId, ...allPhones]) {
+    if (db.sessions?.[p]) {
+      existingSession = db.sessions[p];
+      break;
+    }
+  }
+
+  // 2. Verificar se a sessão expirou por inatividade (> 30 min sem resposta)
   const isExistingSessionExpired = Boolean(
-    existingSession?.lastInteractionAt && (Date.now() - existingSession.lastInteractionAt) > (15 * 60 * 1000)
-  );
-  const isCleanGreetingEarly = [
-    'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hello', 'menu', 'inicio', 'início'
-  ].includes(cleanInput.toLowerCase().trim());
-
-  const isSessionWaitingInput = !isExistingSessionExpired && !isCleanGreetingEarly && Boolean(
-    existingSession?.waitingForVar ||
-    (existingSession?.activeButtons && existingSession.activeButtons.length > 0)
+    existingSession?.lastInteractionAt && (Date.now() - existingSession.lastInteractionAt) > (30 * 60 * 1000)
   );
 
-  // Dynamically resolve published flow, nodes, and edges
+  // 3. Verificar comandos de saída explícita do fluxo (#sair, #cancelar, #reset, etc.)
+  const cleanLower = cleanInput.toLowerCase().trim();
+  const isExplicitExitCmd = [
+    '#sair', '#cancelar', '#reset', '#encerrar', '#parar',
+    '/sair', '/cancelar', '/reset', '/encerrar', '/parar'
+  ].includes(cleanLower);
+
+  // 4. Determinar com precisão se o cliente está NO MEIO DE UM FLUXO ATIVO
+  // Um fluxo está ativo se foi iniciado, não foi marcado como concluído,
+  // tem nó em andamento, não expirou e não foi explicitamente cancelado.
+  const isFlowInProgress = Boolean(
+    existingSession &&
+    existingSession.flowId &&
+    existingSession.flowStatus === 'in_progress' &&
+    existingSession.currentNodeId &&
+    !isExistingSessionExpired &&
+    !isExplicitExitCmd
+  );
+
+  // Se o cliente solicitou saída explícita do fluxo em andamento
+  if (isExplicitExitCmd && isFlowInProgress) {
+    console.log(`[FlowRunner] 🚪 Cliente solicitou cancelamento explícito do fluxo em andamento para ${cleanPhone}.`);
+    existingSession.flowStatus = 'completed';
+    existingSession.currentNodeId = null;
+    existingSession.activeButtons = null;
+    existingSession.waitingForVar = null;
+    existingSession.completedAt = Date.now();
+    for (const p of [targetPhone, cleanPhone, rawId, ...allPhones]) {
+      db.sessions[p] = existingSession;
+    }
+    saveDb(db);
+    const cancelMsg = 'Atendimento anterior cancelado com sucesso. Como posso te ajudar agora?';
+    recordRealMessage(targetPhone, senderName, 'outbound', cancelMsg);
+    return [cancelMsg];
+  }
+
+  // 5. Resolver fluxo: se isFlowInProgress for true, getActiveFlowAndGraph garante 100% que o fluxo atual não será trocado!
   const { publishedFlow, nodes, edges, isKeywordMatch } = await getActiveFlowAndGraph(
     db, 
     existingSession?.flowId, 
     cleanInput, 
-    isSessionWaitingInput
+    isFlowInProgress
   );
 
   // 🛡️ BLINDAGEM INTELIGENTE DE ATENDIMENTO HUMANO:
-  // Se o cliente digitou uma palavra-chave registrada OU um comando de reinício/saudação, o robô assume imediatamente!
-  const cleanLower = cleanInput.toLowerCase().trim();
-  const cleanTextOnly = cleanLower.replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
-  const isBotResetCmd = [
-    '#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio',
-    '/bot', '/sair', '/menu', 'reiniciar', 'menu', 'inicio', 'início', 'começar', 'comecar',
-    'voltar', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'start', 'bot'
-  ].some(cmd => cleanLower === cmd || cleanTextOnly === cmd || cleanTextOnly.startsWith(`${cmd} `));
-
   if (currentConv) {
     if (currentConv.status === 'closed') {
       currentConv.status = 'bot';
@@ -1815,8 +1897,15 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
       const lastAttendantTime = new Date(currentConv.last_attendant_message_at || currentConv.updated_at || 0).getTime();
       const isHumanExpired = (Date.now() - lastAttendantTime) > (15 * 60 * 1000);
 
-      if (isKeywordMatch || isBotResetCmd || isUnassigned || isHumanExpired) {
-        console.log(`🤖 [FlowRunner] ${isBotResetCmd ? `Comando/saudação "${cleanInput}"` : (isUnassigned ? 'Sem atendente atribuído' : 'Inatividade (>15min)')} detectado. Reassumindo atendimento com o robô para ${cleanPhone}.`);
+      const cleanTextOnly = cleanLower.replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+      const isBotHandoffReturn = [
+        '#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio',
+        '/bot', '/sair', '/menu', 'reiniciar', 'menu', 'inicio', 'início', 'começar', 'comecar',
+        'voltar', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'start', 'bot'
+      ].some(cmd => cleanLower === cmd || cleanTextOnly === cmd || cleanTextOnly.startsWith(`${cmd} `));
+
+      if (isKeywordMatch || isBotHandoffReturn || isUnassigned || isHumanExpired) {
+        console.log(`🤖 [FlowRunner] Retornando de atendimento humano para robô para ${cleanPhone}.`);
         currentConv.status = 'bot';
         currentConv.assigned_to = null;
         currentConv.assigned_attendant_name = null;
@@ -1844,30 +1933,19 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
     return [noNodesReply];
   }
 
-  const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
-  const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
-
-  let session = null;
-  for (const p of [targetPhone, cleanPhone, rawId, ...allPhones]) {
-    if (db.sessions?.[p]) {
-      session = db.sessions[p];
-      break;
-    }
-  }
-  if (!session) {
+  let session = existingSession;
+  if (!session || !session.flowId) {
     session = {
       flowId,
+      flowStatus: 'in_progress',
       currentNodeId: null,
       variables: {},
       lastFlowTriggerAt: null,
     };
   }
 
-  if (isKeywordMatch || session.flowId !== flowId || (session.currentNodeId && !nodes.some(n => n.id === session.currentNodeId))) {
-    session.flowId = flowId;
-    session.currentNodeId = null;
-    session.waitingForVar = null;
-  }
+  // Se o fluxo mudou (apenas quando o anterior já terminou) ou sessão expirou ou não há nó atual:
+  const isReset = !isFlowInProgress;
 
   session.variables = {
     ...session.variables,
@@ -1917,64 +1995,12 @@ function parseCustomDateString(input) {
   return today.toISOString().split('T')[0];
 }
 
-  const isExplicitReset =
-    cleanInput.toLowerCase() === 'menu' ||
-    cleanInput.toLowerCase() === 'inicio' ||
-    cleanInput.toLowerCase() === 'início' ||
-    cleanInput.toLowerCase() === 'reiniciar' ||
-    cleanInput.toLowerCase() === 'cancelar' ||
-    cleanInput.toLowerCase() === 'voltar' ||
-    cleanInput.toLowerCase() === 'comecar' ||
-    cleanInput.toLowerCase() === 'começar' ||
-    cleanInput.toLowerCase() === 'start';
+  // Se o usuário está no meio de um fluxo ativo, ou enviou saudação, palavra-chave ou comando, NUNCA sofre cooldown
+  const isGreeting = [
+    'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'opa', 'e ai', 'e aí', 'start', 'iniciar', 'menu', 'inicio', 'início'
+  ].includes(cleanLower);
 
-  const isGreeting =
-    cleanInput.toLowerCase() === 'oi' ||
-    cleanInput.toLowerCase() === 'olá' ||
-    cleanInput.toLowerCase() === 'ola' ||
-    cleanInput.toLowerCase() === 'bom dia' ||
-    cleanInput.toLowerCase() === 'boa tarde' ||
-    cleanInput.toLowerCase() === 'boa noite';
-
-  const prevNode = session.currentNodeId ? nodes.find((n) => n.id === session.currentNodeId) : null;
-  const prevType = prevNode?.data?.nodeType || prevNode?.type;
-  const hasOutgoingEdges = prevNode ? edges.some((e) => e.source === prevNode.id) : false;
-
-  const interactiveTypes = [
-    'question',
-    'buttons',
-    'store_selector',
-    'select_service',
-    'services_catalog',
-    'select_date',
-    'ask_date',
-    'select_time_slot',
-    'schedule_contact',
-    'select_product',
-    'shipping_calculator',
-    'pix_payment',
-    'vip_consultation',
-    'promotional_coupon',
-  ];
-
-  // Inatividade de sessão (> 15 min de inatividade expira o estado intermediário e reinicia o atendimento)
-  const isSessionExpired = Boolean(
-    session.lastInteractionAt && (Date.now() - session.lastInteractionAt) > (15 * 60 * 1000)
-  );
-
-  const isWaitingForInput = !isSessionExpired && !isGreeting && !isExplicitReset && Boolean(
-    session.waitingForVar ||
-    (session.activeButtons && session.activeButtons.length > 0) ||
-    (prevNode && interactiveTypes.includes(prevType))
-  );
-
-  // -------------------------------------------------------------
-  // ⏳ CONTROLE DE COOLDOWN / DELAY DO ROBÔ PARA O MESMO NÚMERO
-  // -------------------------------------------------------------
-  // Palavras-chave, saudações (oi, olá), comandos de reinício e fluxos já concluídos NUNCA sofrem cooldown.
-  // Usuário respondendo a uma pergunta / botão ativo também NÃO sofre cooldown.
-  const isTerminalPrevious = Boolean(prevNode && !hasOutgoingEdges && !isWaitingForInput);
-  const shouldBypassCooldown = isKeywordMatch || isExplicitReset || isWaitingForInput || isGreeting || isTerminalPrevious || !session.currentNodeId;
+  const shouldBypassCooldown = isFlowInProgress || isKeywordMatch || isExplicitExitCmd || isGreeting || session.flowStatus === 'completed' || !session.currentNodeId;
 
   if (!shouldBypassCooldown) {
     const cooldownMinutes = Number(botProfile.flow_cooldown_minutes ?? db.settings?.flow_cooldown_minutes ?? 0);
@@ -1999,17 +2025,12 @@ function parseCustomDateString(input) {
   session.lastFlowTriggerAt = Date.now();
   session.lastInteractionAt = Date.now();
 
-  // Se o nó anterior era terminal (sem saídas) e não está aguardando input do usuário,
-  // ou se o cliente não está no meio de uma resposta de pergunta/botão,
-  // qualquer nova mensagem do cliente executa o fluxo a partir do gatilho!
-  const isTerminalNode = Boolean(prevNode && !hasOutgoingEdges && !isWaitingForInput);
-
-  const isReset = isKeywordMatch || isExplicitReset || isGreeting || isSessionExpired || isTerminalNode || !session.currentNodeId || !isWaitingForInput;
-
   let currentNode = null;
 
   if (isReset) {
     currentNode = nodes.find((n) => (n.data?.nodeType || n.type) === 'trigger') || nodes[0];
+    session.flowId = publishedFlow.id;
+    session.flowStatus = 'in_progress';
     session.currentNodeId = currentNode.id;
     session.waitingForVar = null;
     session.activeButtons = null;
@@ -2413,9 +2434,11 @@ function parseCustomDateString(input) {
         if (targetEdge) {
           currentNode = nodes.find((n) => n.id === targetEdge.target);
           session.currentNodeId = currentNode?.id || null;
+          session.flowStatus = 'in_progress';
+          session.activeButtons = null;
         }
       } else {
-        // If user typed something unrelated while on buttons node
+        // Se o usuário digitou algo fora das opções do menu/botões, re-perguntar sem reiniciar ou sair do fluxo!
         const retryLines = buttons.map((b, i) => {
           const numEmoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'][i] || `*${i + 1}*`;
           const cleanTitle = cleanButtonTitle(b.title || b.text || `Opção ${i + 1}`);
@@ -2424,10 +2447,11 @@ function parseCustomDateString(input) {
 
         const retryMsg = `*Opção não reconhecida.*\n\nPor favor, escolha uma das opções abaixo:\n\n${retryLines}\n\n_👉 Digite o número ou o nome da opção desejada:_`;
         replies.push(retryMsg);
+        session.flowStatus = 'in_progress';
         session.currentNodeId = prevNode.id;
         session.activeButtons = buttons;
         
-        // Save session & return
+        // Salvar sessão e retornar sem acionar nenhum outro fluxo
         if (!db.sessions) db.sessions = {};
         for (const p of [targetPhone, cleanPhone, rawId, ...allPhones]) {
           db.sessions[p] = session;
@@ -2443,6 +2467,7 @@ function parseCustomDateString(input) {
     if (!currentNode) {
       currentNode = prevNode || nodes.find((n) => (n.data?.nodeType || n.type) === 'trigger') || nodes[0];
       session.currentNodeId = currentNode?.id || null;
+      session.flowStatus = 'in_progress';
     }
   }
 
@@ -2598,11 +2623,13 @@ function parseCustomDateString(input) {
                        session.variables['nome_cliente'] || 
                        session.variables['cliente_nome'] || 
                        session.variables['nome'] || 
-                       session.variables['resposta_usuario'] || 
                        (senderName && senderName !== 'Cliente' && senderName !== 'Cliente Pitoco' ? senderName : '') || 
                        'Cliente WhatsApp';
       }
-      resolvedName = formatCustomerName(resolvedName) || String(resolvedName).replace(/[{}]/g, '').trim();
+      resolvedName = formatCustomerName(resolvedName);
+      if (!resolvedName || /^\d+$/.test(resolvedName)) {
+        resolvedName = (senderName && senderName !== 'Cliente' && senderName !== 'Cliente Pitoco') ? formatCustomerName(senderName) : 'Cliente WhatsApp';
+      }
 
       // 2. Resolver Telefone do Cliente (Interagindo, Variável ou Fixo)
       let targetPhone = cleanPhone;
@@ -3617,7 +3644,11 @@ function parseCustomDateString(input) {
       if (db.conversations[`conv-${cleanPhone}`]) {
         db.conversations[`conv-${cleanPhone}`].status = 'waiting_human';
       }
+      session.flowStatus = 'completed';
       session.currentNodeId = null;
+      session.activeButtons = null;
+      session.waitingForVar = null;
+      session.completedAt = Date.now();
       break;
     }
 
@@ -3656,9 +3687,11 @@ function parseCustomDateString(input) {
         replies.push(finalMsg);
       }
 
+      session.flowStatus = 'completed';
       session.currentNodeId = null;
       session.activeButtons = null;
       session.waitingForVar = null;
+      session.completedAt = Date.now();
 
       if (config.clearVariables !== false) {
         session.variables = {
@@ -3684,10 +3717,18 @@ function parseCustomDateString(input) {
       currentNode = nodes.find((n) => n.id === outgoing.target);
       if (currentNode) {
         session.currentNodeId = currentNode.id;
+        session.flowStatus = 'in_progress';
         continue;
       }
     }
 
+    // Se NÃO há conexões de saída (NÓ TERMINAL / FIM DO FLUXO):
+    session.flowStatus = 'completed';
+    session.currentNodeId = null;
+    session.activeButtons = null;
+    session.waitingForVar = null;
+    session.completedAt = Date.now();
+    console.log(`[FlowRunner] 🏁 [Fim de Fluxo] Fluxo "${publishedFlow.name}" concluído com sucesso ao atingir nó terminal "${currentNode.id}".`);
     break;
   }
 

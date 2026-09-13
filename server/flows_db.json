@@ -1271,6 +1271,20 @@
     ],
     "flow-pitoco-001": [
       {
+        "id": "xy-edge__node-question-1788893542405-node-update_contact-1788906881259",
+        "flow_id": "flow-pitoco-001",
+        "source": "node-question-1788893542405",
+        "target": "node-update_contact-1788906881259",
+        "data": {}
+      },
+      {
+        "id": "xy-edge__node-message-1788908658917-node-message-1788908698448",
+        "flow_id": "flow-pitoco-001",
+        "source": "node-message-1788908658917",
+        "target": "node-message-1788908698448",
+        "data": {}
+      },
+      {
         "id": "xy-edge__node-check_contact-1788893686878-is_existing-node-message-1788908658917",
         "flow_id": "flow-pitoco-001",
         "source": "node-check_contact-1788893686878",
@@ -1305,20 +1319,6 @@
         "flow_id": "flow-pitoco-001",
         "source": "node-show_catalog-1789253962865",
         "target": "node-human_handoff-1789176476938",
-        "data": {}
-      },
-      {
-        "id": "xy-edge__node-question-1788893542405-node-update_contact-1788906881259",
-        "flow_id": "flow-pitoco-001",
-        "source": "node-question-1788893542405",
-        "target": "node-update_contact-1788906881259",
-        "data": {}
-      },
-      {
-        "id": "xy-edge__node-message-1788908658917-node-message-1788908698448",
-        "flow_id": "flow-pitoco-001",
-        "source": "node-message-1788908658917",
-        "target": "node-message-1788908698448",
         "data": {}
       },
       {
@@ -1466,20 +1466,6 @@
       "created_at": "2026-09-12T23:30:08.967Z",
       "updated_at": "2026-09-12T23:31:25.702Z"
     },
-    "5581977770001": {
-      "id": "contact-5581977770001",
-      "phone": "5581977770001",
-      "name": "Novo Cliente",
-      "whatsapp_pushname": "Novo Cliente",
-      "status": "lead",
-      "tags": [
-        "Lead"
-      ],
-      "is_registered": false,
-      "metadata": {},
-      "created_at": "2026-09-12T23:43:39.101Z",
-      "updated_at": "2026-09-12T23:43:50.175Z"
-    },
     "5581911112222": {
       "id": "contact-5581911112222",
       "name": "Juliana Santos",
@@ -1560,20 +1546,6 @@
       "last_message": "Sucesso total! HTTP: 200, WH: 201, Item: delectus aut autem",
       "last_message_at": "2026-09-12T23:31:25.702Z",
       "updated_at": "2026-09-12T23:31:25.702Z"
-    },
-    "conv-5581977770001": {
-      "id": "conv-5581977770001",
-      "contact_id": "contact-5581977770001",
-      "contact_name": "Novo Cliente",
-      "contact_phone": "5581977770001",
-      "status": "closed",
-      "store_name": "Pitoco de Gente",
-      "started_at": "2026-09-12T23:43:39.101Z",
-      "unread_count": 0,
-      "created_at": "2026-09-12T23:43:39.101Z",
-      "last_message": "🏁 *Atendimento finalizado com sucesso!*\n\nSe precisar de algo mais, basta nos enviar uma nova mensagem. Até logo!",
-      "last_message_at": "2026-09-12T23:43:50.175Z",
-      "updated_at": "2026-09-12T23:43:50.175Z"
     },
     "conv-5581911112222": {
       "id": "conv-5581911112222",
@@ -2229,6 +2201,132 @@
         "content": "🏁 *Atendimento finalizado com sucesso!*\n\nSe precisar de algo mais, basta nos enviar uma nova mensagem. Até logo!",
         "status": "delivered",
         "created_at": "2026-09-12T23:43:50.175Z"
+      },
+      {
+        "id": "msg-1789261820038-9m6y0",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:10:20.038Z"
+      },
+      {
+        "id": "msg-1789261820051-gzqcj",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:10:20.051Z"
+      },
+      {
+        "id": "msg-1789261820063-iua45",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:10:20.063Z"
+      },
+      {
+        "id": "msg-1789261821154-laei4",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "*Opção não reconhecida.*\n\nPor favor, escolha uma das opções abaixo:\n\n1️⃣ *Matriz — Centro*\n\n2️⃣ *Ipojuca - Filial*\n\n_👉 Digite o número ou o nome da opção desejada:_",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:10:21.154Z"
+      },
+      {
+        "id": "msg-1789261821791-n7e0b",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Você escolheu a *Loja Ipojuca - Filial*, seu atendimento será personalizado para essa loja, o que você deseja:",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:10:21.791Z"
+      },
+      {
+        "id": "msg-1789261860743-ozoih",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "*Opção não reconhecida.*\n\nPor favor, escolha uma das opções abaixo:\n\n1️⃣ *Ver Catálogo Bebê*\n\n2️⃣ *Guia de Medidas (RN a 3 Anos)*\n\n3️⃣ *Falar com Atendente*\n\n_👉 Digite o número ou o nome da opção desejada:_",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:11:00.743Z"
+      },
+      {
+        "id": "msg-1789261861389-wxm5y",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "*Opção não reconhecida.*\n\nPor favor, escolha uma das opções abaixo:\n\n1️⃣ *Ver Catálogo Bebê*\n\n2️⃣ *Guia de Medidas (RN a 3 Anos)*\n\n3️⃣ *Falar com Atendente*\n\n_👉 Digite o número ou o nome da opção desejada:_",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:11:01.389Z"
+      },
+      {
+        "id": "msg-1789261862020-6n8a0",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "📏 *Tabela de Medidas Pitoco de Gente (RN a 3 Anos)*\n\nConfira as referências para escolher o tamanho certinho:\n\n• *RN:* Até 52 cm | Até 3,5 kg (Mala Maternidade)\n• *P (0 a 3m):* 52 a 62 cm | 3,5 a 5,5 kg\n• *M (3 a 6m):* 62 a 67 cm | 5,5 a 7,5 kg\n• *G (6 a 9m):* 67 a 72 cm | 7,5 a 9,5 kg\n• *GG / 1 Ano:* 72 a 77 cm | 9,5 a 11,5 kg\n• *2 Anos:* 77 a 88 cm | 11,5 a 13,5 kg\n• *3 Anos:* 88 a 98 cm | 13,5 a 15,5 kg\n\n💡 _Dica da Pitoco: Bebês crescem muito rápido nos primeiros 3 meses! Se tiver em dúvida entre 2 tamanhos, prefira sempre o maior._",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:11:02.020Z"
+      },
+      {
+        "id": "msg-1789261862033-thtxt",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "Você foi transferido para um de nossos atendentes humanos.",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:11:02.033Z"
+      },
+      {
+        "id": "msg-1789261931169-0khz1",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:12:11.169Z"
+      },
+      {
+        "id": "msg-1789261932388-wewi8",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:12:12.388Z"
+      },
+      {
+        "id": "msg-1789261932403-dqo1s",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:12:12.403Z"
+      },
+      {
+        "id": "msg-1789261932427-i4hy4",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:12:12.427Z"
+      },
+      {
+        "id": "msg-1789261933381-e2ngs",
+        "conversation_id": "conv-5581977770001",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Você escolheu a *Loja Ipojuca - Filial*, seu atendimento será personalizado para essa loja, o que você deseja:",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:12:13.381Z"
       }
     ],
     "conv-5581911112222": [
@@ -2368,6 +2466,116 @@
         "content": "Opções Interativas",
         "status": "delivered",
         "created_at": "2026-09-13T00:12:37.439Z"
+      }
+    ],
+    "conv-5581988887777": [
+      {
+        "id": "msg-1789261738349-stzj6",
+        "conversation_id": "conv-5581988887777",
+        "direction": "inbound",
+        "message_type": "text",
+        "content": "oi",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:08:58.348Z"
+      },
+      {
+        "id": "msg-1789261785060-e3m4z",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:45.060Z"
+      },
+      {
+        "id": "msg-1789261785075-3bj3k",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:45.075Z"
+      },
+      {
+        "id": "msg-1789261785095-67mp3",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:45.095Z"
+      },
+      {
+        "id": "msg-1789261785838-dbete",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "*Opção não reconhecida.*\n\nPor favor, escolha uma das opções abaixo:\n\n1️⃣ *Matriz — Centro*\n\n2️⃣ *Ipojuca - Filial*\n\n_👉 Digite o número ou o nome da opção desejada:_",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:45.838Z"
+      },
+      {
+        "id": "msg-1789261786437-qh7i8",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Você escolheu a *Loja Ipojuca - Filial*, seu atendimento será personalizado para essa loja, o que você deseja:",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:46.437Z"
+      },
+      {
+        "id": "msg-1789261787053-l1uyv",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "*Opção não reconhecida.*\n\nPor favor, escolha uma das opções abaixo:\n\n1️⃣ *Ver Catálogo Bebê*\n\n2️⃣ *Guia de Medidas (RN a 3 Anos)*\n\n3️⃣ *Falar com Atendente*\n\n_👉 Digite o número ou o nome da opção desejada:_",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:47.053Z"
+      },
+      {
+        "id": "msg-1789261787640-xj39y",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "📏 *Tabela de Medidas Pitoco de Gente (RN a 3 Anos)*\n\nConfira as referências para escolher o tamanho certinho:\n\n• *RN:* Até 52 cm | Até 3,5 kg (Mala Maternidade)\n• *P (0 a 3m):* 52 a 62 cm | 3,5 a 5,5 kg\n• *M (3 a 6m):* 62 a 67 cm | 5,5 a 7,5 kg\n• *G (6 a 9m):* 67 a 72 cm | 7,5 a 9,5 kg\n• *GG / 1 Ano:* 72 a 77 cm | 9,5 a 11,5 kg\n• *2 Anos:* 77 a 88 cm | 11,5 a 13,5 kg\n• *3 Anos:* 88 a 98 cm | 13,5 a 15,5 kg\n\n💡 _Dica da Pitoco: Bebês crescem muito rápido nos primeiros 3 meses! Se tiver em dúvida entre 2 tamanhos, prefira sempre o maior._",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:47.640Z"
+      },
+      {
+        "id": "msg-1789261787653-bjcil",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "Você foi transferido para um de nossos atendentes humanos.",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:47.653Z"
+      },
+      {
+        "id": "msg-1789261795345-pad2g",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:55.345Z"
+      },
+      {
+        "id": "msg-1789261795363-6eg27",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:55.363Z"
+      },
+      {
+        "id": "msg-1789261795382-dn49j",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "🏁 *Atendimento finalizado com sucesso!*\n\nSe precisar de algo mais, basta nos enviar uma nova mensagem. Até logo!",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:09:55.382Z"
       }
     ]
   },
@@ -2872,35 +3080,6 @@
       "lastFlowTriggerAt": 1789258356370,
       "lastInteractionAt": 1789258356370
     },
-    "5581988887777": {
-      "flowId": "flow-pitoco-001",
-      "currentNodeId": null,
-      "variables": {
-        "whatsapp_pushname": "Mariana",
-        "telefone_cliente": "5581988887777",
-        "telefone_whatsapp": "5581988887777",
-        "ultima_mensagem": "3",
-        "nome_cliente": "",
-        "opcao_selecionada": "3. Falar com Atendente",
-        "botao_id": "btn_atendente",
-        "catalogo_servicos_texto": "🍼 *DESTAQUES PITOCO DE GENTE*\nConfira nossas peças queridinhas do momento:\n\n*1️⃣* *Consultoria VIP de Enxoval (Online ou Loja)*\n   💰 R$ 0,00 • ⏱️ 45 min\n   _Atendimento exclusivo com especialista para montar a lista ideal do bebê_\n\n*2️⃣* *Kit Saída de Maternidade Tricot Realeza*\n   💰 R$ 199,90 • ⏱️ 30 min\n   _Macacão bordado + manta antialérgica 100% algodão_\n\n*3️⃣* *Kit Bodies Suedine Pima (3 Peças)*\n   💰 R$ 89,90 • ⏱️ 30 min\n   _Toque macio, gola americana facilitada e botões de pressão_\n\n*4️⃣* *Macacão Zíper Duplo Termo Confort*\n   💰 R$ 79,90 • ⏱️ 30 min\n   _Praticidade nas trocas noturnas sem despir o bebê_\n\n*5️⃣* *Kit Ninho Redutor + Almofada Amamentação*\n   💰 R$ 189,00 • ⏱️ 30 min\n   _Aconchego e segurança para os primeiros meses do recém-nascido_\n\n_Para pedir ou verificar tamanhos (RN a 3 anos), basta nos chamar!_",
-        "catalogo_servicos": "🍼 *DESTAQUES PITOCO DE GENTE*\nConfira nossas peças queridinhas do momento:\n\n*1️⃣* *Consultoria VIP de Enxoval (Online ou Loja)*\n   💰 R$ 0,00 • ⏱️ 45 min\n   _Atendimento exclusivo com especialista para montar a lista ideal do bebê_\n\n*2️⃣* *Kit Saída de Maternidade Tricot Realeza*\n   💰 R$ 199,90 • ⏱️ 30 min\n   _Macacão bordado + manta antialérgica 100% algodão_\n\n*3️⃣* *Kit Bodies Suedine Pima (3 Peças)*\n   💰 R$ 89,90 • ⏱️ 30 min\n   _Toque macio, gola americana facilitada e botões de pressão_\n\n*4️⃣* *Macacão Zíper Duplo Termo Confort*\n   💰 R$ 79,90 • ⏱️ 30 min\n   _Praticidade nas trocas noturnas sem despir o bebê_\n\n*5️⃣* *Kit Ninho Redutor + Almofada Amamentação*\n   💰 R$ 189,00 • ⏱️ 30 min\n   _Aconchego e segurança para os primeiros meses do recém-nascido_\n\n_Para pedir ou verificar tamanhos (RN a 3 anos), basta nos chamar!_"
-      },
-      "activeButtons": [
-        {
-          "id": "btn_catalogo",
-          "title": "Ver Catálogo Bebê"
-        },
-        {
-          "id": "btn_enxoval",
-          "title": "Consultoria de Enxoval"
-        },
-        {
-          "id": "btn_atendente",
-          "title": "Falar com Atendente"
-        }
-      ]
-    },
     "5581999991111": {
       "flowId": "flow-pitoco-001",
       "currentNodeId": "node-catalog-pitoco",
@@ -2929,19 +3108,6 @@
           "title": "Falar com Atendente"
         }
       ]
-    },
-    "5581977770001": {
-      "flowId": "flow-1788911034109",
-      "currentNodeId": null,
-      "variables": {
-        "whatsapp_pushname": "Novo Cliente",
-        "telefone_cliente": "5581977770001",
-        "telefone_whatsapp": "5581977770001"
-      },
-      "lastFlowTriggerAt": 1789256623119,
-      "lastInteractionAt": 1789256623119,
-      "waitingForVar": null,
-      "activeButtons": null
     },
     "558196138924": {
       "flowId": "flow-pitoco-001",
@@ -3041,17 +3207,17 @@
   "rolePermissions": {},
   "logs": [
     {
-      "id": "log-1789258360071-5cv1g",
+      "id": "log-1789261933394-nq3of",
       "type": "message_outbound",
-      "title": "Resposta para Malaquias",
+      "title": "Resposta para Cliente",
       "description": "Mensagem Interativa",
-      "contact_phone": "558196138924",
-      "contact_name": "Malaquias",
+      "contact_phone": "5581977770001",
+      "contact_name": "Cliente",
       "details": {
         "direction": "outbound",
-        "messageId": "msg-1789258360066-3al4w"
+        "messageId": "msg-1789261933381-e2ngs"
       },
-      "created_at": "2026-09-13T00:12:40.071Z"
+      "created_at": "2026-09-13T01:12:13.394Z"
     }
   ]
 }
