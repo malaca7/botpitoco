@@ -1380,8 +1380,8 @@ app.post('/api/contacts', async (req, res) => {
         }
         if (db.conversations) delete db.conversations[`conv-${p}`];
         if (supabaseServer) {
-          supabaseServer.from('clients').delete().eq('phone', p).catch(() => {});
-          supabaseServer.from('contacts').delete().eq('phone', p).catch(() => {});
+          Promise.resolve(supabaseServer.from('clients').delete().eq('phone', p)).catch(() => {});
+          Promise.resolve(supabaseServer.from('contacts').delete().eq('phone', p)).catch(() => {});
         }
       }
     }
@@ -1439,8 +1439,8 @@ app.put('/api/contacts/:id', async (req, res) => {
         }
         if (db.conversations) delete db.conversations[`conv-${p}`];
         if (supabaseServer) {
-          supabaseServer.from('clients').delete().eq('phone', p).catch(() => {});
-          supabaseServer.from('contacts').delete().eq('phone', p).catch(() => {});
+          Promise.resolve(supabaseServer.from('clients').delete().eq('phone', p)).catch(() => {});
+          Promise.resolve(supabaseServer.from('contacts').delete().eq('phone', p)).catch(() => {});
         }
       }
     }

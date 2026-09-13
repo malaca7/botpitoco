@@ -141,7 +141,7 @@ export async function syncToSupabase(dbOverride) {
         if (error) report.errors.push(`clients: ${error.message}`);
         else report.clients++;
 
-        await supabase.from('contacts').upsert({
+        await Promise.resolve(supabase.from('contacts').upsert({
           id: c.id || `contact-${cleanPhone}`,
           phone: cleanPhone,
           name: c.name || 'Cliente WhatsApp',
@@ -149,7 +149,7 @@ export async function syncToSupabase(dbOverride) {
           tags: c.tags || ['Cliente WhatsApp'],
           metadata: c.custom_fields || c.metadata || {},
           updated_at: new Date().toISOString()
-        }, { onConflict: 'phone' }).catch(() => {});
+        }, { onConflict: 'phone' })).catch(() => {});
       } catch (err) {
         report.errors.push(`clients: ${err.message}`);
       }

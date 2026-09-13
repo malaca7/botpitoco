@@ -325,8 +325,8 @@ function migrateLidContacts(db) {
 
         // Excluir LID da nuvem para evitar duplicatas no CRM
         if (supabaseClient) {
-          supabaseClient.from('clients').delete().eq('phone', key).catch(() => {});
-          supabaseClient.from('contacts').delete().eq('phone', key).catch(() => {});
+          Promise.resolve(supabaseClient.from('clients').delete().eq('phone', key)).catch(() => {});
+          Promise.resolve(supabaseClient.from('contacts').delete().eq('phone', key)).catch(() => {});
         }
 
         console.log(`[FlowRunner] 🔄 Contato migrado de LID ${key} para o número real: ${realPhone}`);
@@ -2159,8 +2159,8 @@ function parseCustomDateString(input) {
             delete db.contacts[p];
             if (db.conversations) delete db.conversations[`conv-${p}`];
             if (supabaseClient) {
-              supabaseClient.from('clients').delete().eq('phone', p).catch(() => {});
-              supabaseClient.from('contacts').delete().eq('phone', p).catch(() => {});
+              Promise.resolve(supabaseClient.from('clients').delete().eq('phone', p)).catch(() => {});
+              Promise.resolve(supabaseClient.from('contacts').delete().eq('phone', p)).catch(() => {});
             }
           }
         }
@@ -2766,8 +2766,8 @@ function parseCustomDateString(input) {
           delete db.contacts[p];
           if (db.conversations) delete db.conversations[`conv-${p}`];
           if (supabaseClient) {
-            supabaseClient.from('clients').delete().eq('phone', p).catch(() => {});
-            supabaseClient.from('contacts').delete().eq('phone', p).catch(() => {});
+            Promise.resolve(supabaseClient.from('clients').delete().eq('phone', p)).catch(() => {});
+            Promise.resolve(supabaseClient.from('contacts').delete().eq('phone', p)).catch(() => {});
           }
         }
       }
