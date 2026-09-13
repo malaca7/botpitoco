@@ -183,11 +183,19 @@ export async function syncConversationToSupabase(conv) {
   if (!supabaseClient || !conv) return;
   try {
     const cleanPhone = String(conv.contact_phone || conv.phone || '').replace(/\D/g, '');
+    const isLid = cleanPhone.length >= 14 || cleanPhone.startsWith('1686') || cleanPhone.startsWith('219');
+    if (isLid) return; // NUNCA sincronizar WhatsApp LID como conversa no Supabase
+
+    let safeName = conv.contact_name || 'Cliente';
+    if (['pitoco bot', 'bot', 'assistente', 'robô', 'robo'].includes(safeName.toLowerCase().trim())) {
+      safeName = 'Cliente WhatsApp';
+    }
+
     const payload = {
       id: conv.id || `conv-${cleanPhone}`,
       contact_id: conv.contact_id || `contact-${cleanPhone}`,
       phone: cleanPhone,
-      contact_name: conv.contact_name || 'Cliente',
+      contact_name: safeName,
       last_message: typeof conv.last_message === 'string' ? conv.last_message : (conv.last_message?.body || 'Mensagem'),
       last_message_at: conv.last_message_at || new Date().toISOString(),
       status: conv.status || 'bot',
@@ -903,43 +911,53 @@ export function recordRealMessage(phone, senderName, direction, content, explici
   const { primaryPhone } = resolveLinkedPhones(cleanPhone, db);
   const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
   const isTargetLid = targetPhone.length >= 14 || targetPhone.startsWith('1686') || targetPhone.startsWith('219');
+  
+  // 🛡️ NUNCA criar contatos ou conversas para WhatsApp LIDs não vinculados
+  if (isTargetLid) {
+    return;
+  }
+
   const convId = `conv-${targetPhone}`;
   const now = new Date().toISOString();
 
-  // 1. Upsert Contact (Apenas para números reais, NUNCA para LID)
+  // Filtrar nomes do próprio robô/atendente para NUNCA serem atribuídos ao cliente
+  const botNames = ['pitoco bot', 'pitoco', 'bot', 'assistente', 'robô', 'robo', 'pitoco atendente', 'atendente', 'undefined', 'null', 'victoria', 'amanda', 'sofia'];
+  const cleanSenderLower = (senderName || '').toLowerCase().trim();
+  const isBotSender = !senderName || botNames.includes(cleanSenderLower);
+  const safeCustomerName = isBotSender ? '' : senderName;
+
+  // 1. Upsert Contact (Apenas para números reais de clientes)
   let existingContact = null;
-  if (!isTargetLid) {
-    if (!db.contacts) db.contacts = {};
-    existingContact = db.contacts[targetPhone] || {
-      id: `contact-${targetPhone}`,
-      phone: targetPhone,
-      name: (senderName && senderName !== 'Cliente' && senderName !== 'Cliente Pitoco') ? formatCustomerName(senderName) : 'Cliente WhatsApp',
-      whatsapp_pushname: senderName || undefined,
-      profile_picture_url: profilePicUrl || undefined,
-      status: 'lead',
-      tags: explicitTags || ['Lead'],
-      is_registered: false,
-      metadata: {},
-      created_at: now,
-    };
+  if (!db.contacts) db.contacts = {};
+  existingContact = db.contacts[targetPhone] || {
+    id: `contact-${targetPhone}`,
+    phone: targetPhone,
+    name: safeCustomerName ? formatCustomerName(safeCustomerName) : 'Cliente WhatsApp',
+    whatsapp_pushname: safeCustomerName || undefined,
+    profile_picture_url: profilePicUrl || undefined,
+    status: 'lead',
+    tags: explicitTags || ['Lead'],
+    is_registered: false,
+    metadata: {},
+    created_at: now,
+  };
 
-    if (senderName && senderName !== 'Cliente' && senderName !== 'Cliente Pitoco') {
-      existingContact.whatsapp_pushname = senderName;
-      // NUNCA sobrescrever com pushName se o contato já foi registrado com nome real
-      if (!existingContact.is_registered && (!existingContact.name || existingContact.name === 'Cliente WhatsApp' || existingContact.name === 'Cliente')) {
-        existingContact.name = formatCustomerName(senderName) || senderName;
-      }
+  if (safeCustomerName) {
+    existingContact.whatsapp_pushname = safeCustomerName;
+    // NUNCA sobrescrever com pushName se o contato já foi registrado com nome real
+    if (!existingContact.is_registered && (!existingContact.name || existingContact.name === 'Cliente WhatsApp' || existingContact.name === 'Cliente')) {
+      existingContact.name = formatCustomerName(safeCustomerName) || safeCustomerName;
     }
-    if (profilePicUrl && !existingContact.profile_picture_url) {
-      existingContact.profile_picture_url = profilePicUrl;
-    }
-    if (explicitTags && Array.isArray(explicitTags)) {
-      existingContact.tags = explicitTags;
-    }
-
-    existingContact.updated_at = now;
-    db.contacts[targetPhone] = existingContact;
   }
+  if (profilePicUrl && !existingContact.profile_picture_url) {
+    existingContact.profile_picture_url = profilePicUrl;
+  }
+  if (explicitTags && Array.isArray(explicitTags)) {
+    existingContact.tags = explicitTags;
+  }
+
+  existingContact.updated_at = now;
+  db.contacts[targetPhone] = existingContact;
 
   // 2. Upsert Conversation
   if (!db.conversations) db.conversations = {};
@@ -948,8 +966,9 @@ export function recordRealMessage(phone, senderName, direction, content, explici
     ...prevConv,
     id: convId,
     contact_id: existingContact?.id || `contact-${targetPhone}`,
-    contact_name: existingContact?.name || prevConv.contact_name || (senderName && senderName !== 'Cliente' ? senderName : 'Cliente WhatsApp'),
+    contact_name: existingContact?.name || prevConv.contact_name || (safeCustomerName ? formatCustomerName(safeCustomerName) : 'Cliente WhatsApp'),
     contact_phone: targetPhone,
+    phone: targetPhone,
     status: prevConv.status || 'bot',
     assigned_to: prevConv.assigned_to || undefined,
     assigned_attendant_name: prevConv.assigned_attendant_name || undefined,

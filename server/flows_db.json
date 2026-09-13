@@ -2576,6 +2576,105 @@
         "content": "🏁 *Atendimento finalizado com sucesso!*\n\nSe precisar de algo mais, basta nos enviar uma nova mensagem. Até logo!",
         "status": "delivered",
         "created_at": "2026-09-13T01:09:55.382Z"
+      },
+      {
+        "id": "msg-1789262797300-pcnui",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:37.300Z"
+      },
+      {
+        "id": "msg-1789262797317-i6uja",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:37.316Z"
+      },
+      {
+        "id": "msg-1789262797335-w434b",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:37.335Z"
+      },
+      {
+        "id": "msg-1789262798306-4sf77",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "*Opção não reconhecida.*\n\nPor favor, escolha uma das opções abaixo:\n\n1️⃣ *Matriz — Centro*\n\n2️⃣ *Ipojuca - Filial*\n\n_👉 Digite o número ou o nome da opção desejada:_",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:38.306Z"
+      },
+      {
+        "id": "msg-1789262798956-28yv4",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Você escolheu a *Loja Ipojuca - Filial*, seu atendimento será personalizado para essa loja, o que você deseja:",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:38.956Z"
+      },
+      {
+        "id": "msg-1789262799591-4s5di",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "*Opção não reconhecida.*\n\nPor favor, escolha uma das opções abaixo:\n\n1️⃣ *Ver Catálogo Bebê*\n\n2️⃣ *Guia de Medidas (RN a 3 Anos)*\n\n3️⃣ *Falar com Atendente*\n\n_👉 Digite o número ou o nome da opção desejada:_",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:39.591Z"
+      },
+      {
+        "id": "msg-1789262800173-m5c00",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "📏 *Tabela de Medidas Pitoco de Gente (RN a 3 Anos)*\n\nConfira as referências para escolher o tamanho certinho:\n\n• *RN:* Até 52 cm | Até 3,5 kg (Mala Maternidade)\n• *P (0 a 3m):* 52 a 62 cm | 3,5 a 5,5 kg\n• *M (3 a 6m):* 62 a 67 cm | 5,5 a 7,5 kg\n• *G (6 a 9m):* 67 a 72 cm | 7,5 a 9,5 kg\n• *GG / 1 Ano:* 72 a 77 cm | 9,5 a 11,5 kg\n• *2 Anos:* 77 a 88 cm | 11,5 a 13,5 kg\n• *3 Anos:* 88 a 98 cm | 13,5 a 15,5 kg\n\n💡 _Dica da Pitoco: Bebês crescem muito rápido nos primeiros 3 meses! Se tiver em dúvida entre 2 tamanhos, prefira sempre o maior._",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:40.173Z"
+      },
+      {
+        "id": "msg-1789262800189-g45id",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "Você foi transferido para um de nossos atendentes humanos.",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:40.189Z"
+      },
+      {
+        "id": "msg-1789262807795-m7294",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:47.795Z"
+      },
+      {
+        "id": "msg-1789262807822-nn1wz",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:47.822Z"
+      },
+      {
+        "id": "msg-1789262807847-xphsc",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "🏁 *Atendimento finalizado com sucesso!*\n\nSe precisar de algo mais, basta nos enviar uma nova mensagem. Até logo!",
+        "status": "delivered",
+        "created_at": "2026-09-13T01:26:47.847Z"
       }
     ]
   },
@@ -3207,17 +3306,17 @@
   "rolePermissions": {},
   "logs": [
     {
-      "id": "log-1789261933394-nq3of",
+      "id": "log-1789262807857-669sc",
       "type": "message_outbound",
-      "title": "Resposta para Cliente",
-      "description": "Mensagem Interativa",
-      "contact_phone": "5581977770001",
-      "contact_name": "Cliente",
+      "title": "Resposta para Jack Teste",
+      "description": "🏁 *Atendimento finalizado com sucesso!*\n\nSe precisar de algo mais, basta nos enviar uma n...",
+      "contact_phone": "5581988887777",
+      "contact_name": "Jack Teste",
       "details": {
         "direction": "outbound",
-        "messageId": "msg-1789261933381-e2ngs"
+        "messageId": "msg-1789262807847-xphsc"
       },
-      "created_at": "2026-09-13T01:12:13.394Z"
+      "created_at": "2026-09-13T01:26:47.857Z"
     }
   ]
 }

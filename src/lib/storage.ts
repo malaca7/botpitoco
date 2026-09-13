@@ -413,13 +413,27 @@ export const StorageService = {
   // 3. CONVERSAS & INBOX DE ATENDIMENTO HUMANO
   // ==============================================================================
   async getConversations(storeId?: string): Promise<Conversation[]> {
+    const isLid = (p?: string) => {
+      const clean = String(p || '').replace(/\D/g, '');
+      return !clean || clean.length >= 14 || clean.startsWith('1686') || clean.startsWith('219');
+    };
+    const isValidConv = (c: Conversation) => {
+      if (!c) return false;
+      if (isLid(c.contact_phone || c.phone)) return false;
+      if (c.id && (c.id.includes('1686') || c.id.includes('219') || c.id.length >= 19)) return false;
+      const name = (c.contact_name || '').toLowerCase().trim();
+      if (name === 'pitoco bot' || name === 'bot') return false;
+      return true;
+    };
+
     try {
       const res = await fetch(`${API_BASE}/api/conversations`, { signal: AbortSignal.timeout(2500) });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          setItem(STORAGE_KEYS.CONVERSATIONS, data);
-          let filtered = data;
+          const cleanConvs = data.filter(isValidConv);
+          setItem(STORAGE_KEYS.CONVERSATIONS, cleanConvs);
+          let filtered = cleanConvs;
           if (storeId) filtered = filtered.filter(c => !c.store_id || c.store_id === storeId);
           return filtered;
         }
@@ -429,11 +443,13 @@ export const StorageService = {
     if (SupabaseService.isSupabaseReady) {
       const dbConvs = await SupabaseService.getConversations(storeId);
       if (Array.isArray(dbConvs)) {
-        setItem(STORAGE_KEYS.CONVERSATIONS, dbConvs);
-        return dbConvs;
+        const cleanConvs = dbConvs.filter(isValidConv);
+        setItem(STORAGE_KEYS.CONVERSATIONS, cleanConvs);
+        return cleanConvs;
       }
     }
     let convs = getItem<Conversation[]>(STORAGE_KEYS.CONVERSATIONS, []);
+    convs = (Array.isArray(convs) ? convs : []).filter(isValidConv);
     if (storeId) {
       convs = convs.filter(c => !c.store_id || c.store_id === storeId);
     }
@@ -764,13 +780,17 @@ export const StorageService = {
       const clean = String(p || '').replace(/\D/g, '');
       return !clean || clean.length >= 14 || clean.startsWith('1686') || clean.startsWith('219');
     };
+    const isBot = (name?: string) => {
+      const n = (name || '').toLowerCase().trim();
+      return n === 'pitoco bot' || n === 'bot';
+    };
 
     // 1. Tentar carregar do Supabase (Fonte Central da Verdade)
     if (SupabaseService.isSupabaseReady) {
       try {
         const dbClients = await SupabaseService.getClients(storeId);
         if (Array.isArray(dbClients)) {
-          const cleanClients = dbClients.filter(c => !isLid(c.phone));
+          const cleanClients = dbClients.filter(c => !isLid(c.phone) && !isBot(c.name));
           setItem(STORAGE_KEYS.CONTACTS, cleanClients);
           return cleanClients;
         }
@@ -786,7 +806,7 @@ export const StorageService = {
       if (res && res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          const cleanClients = data.filter((c: any) => !isLid(c.phone));
+          const cleanClients = data.filter((c: any) => !isLid(c.phone) && !isBot(c.name));
           setItem(STORAGE_KEYS.CONTACTS, cleanClients);
           return cleanClients;
         }
@@ -798,6 +818,7 @@ export const StorageService = {
     if (Array.isArray(contacts)) {
       contacts = contacts.filter(c => {
         if (isLid(c.phone)) return false;
+        if (isBot(c.name)) return false;
         return !storeId || !c.store_id || c.store_id === storeId;
       });
     }

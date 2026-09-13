@@ -35,7 +35,8 @@ import {
   syncFlowGraphToSupabase,
   cleanButtonTitle,
   resolveLinkedPhones,
-  syncContactToSupabase
+  syncContactToSupabase,
+  recordRealMessage
 } from './flowRunner.mjs';
 import { processAdminBotMessage } from './botEngine.mjs';
 import { syncToSupabase } from './syncSupabase.mjs';
@@ -230,11 +231,11 @@ async function startWhatsApp() {
       for (const msg of (messages || [])) {
         if (!msg.message) continue;
         const remoteJid = msg.key.remoteJid || '';
-        if (remoteJid.includes('@g.us') || remoteJid === 'status@broadcast') continue;
+        if (!remoteJid || remoteJid.includes('@g.us') || remoteJid === 'status@broadcast' || remoteJid.includes('broadcast') || remoteJid.includes('@newsletter')) continue;
 
-        // Auto-teste: se o próprio número do bot enviar mensagem para si mesmo (Note to Self), permitir rodar fluxo
-        const isSelf = Boolean(msg.key.fromMe && (remoteJid.includes(connectedPhone) || !remoteJid.endsWith('@s.whatsapp.net')));
-        if (msg.key.fromMe && !isSelf) continue;
+        // 🛑 REGRA FUNDAMENTAL: NUNCA processar mensagens enviadas pelo próprio robô ou atendente (fromMe: true)
+        // Isso previne 100% de loops, respostas a si mesmo, criação de chats fantasmas e duplicações de contatos.
+        if (msg.key.fromMe) continue;
 
         // Desempacotar mensagens com wrappers do WhatsApp (ephemeral, viewOnce, etc.)
         let m = msg.message;
@@ -266,21 +267,35 @@ async function startWhatsApp() {
         }
 
         const rawPhone = remoteJid.replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
-        const participantPhone = (msg.key.participant || msg.participant || '').replace('@s.whatsapp.net', '').replace(/\D/g, '');
+        const participantPhone = (msg.key.participant || msg.participant || '').replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
         const dbCheck = loadDb();
         const { primaryPhone, allPhones } = resolveLinkedPhones(rawPhone, dbCheck);
 
         // Identificar telefone real do cliente (prioriza formato celular 10-13 dígitos sobre LID)
-        const clientPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13)
+        let clientPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13)
           ? primaryPhone
           : (participantPhone && participantPhone.length >= 10 && participantPhone.length <= 13)
             ? participantPhone
             : rawPhone;
 
-        // JID de destino para envio: se remoteJid for @lid, enviar para o telefone real @s.whatsapp.net
-        const destinationJid = (clientPhone && clientPhone.length >= 10 && clientPhone.length <= 13)
-          ? `${clientPhone}@s.whatsapp.net`
-          : remoteJid;
+        const isLid = clientPhone.length >= 14 || clientPhone.startsWith('1686') || clientPhone.startsWith('219');
+        if (isLid) {
+          for (const p of allPhones) {
+            if (p.length >= 10 && p.length <= 13) {
+              clientPhone = p;
+              break;
+            }
+          }
+        }
+
+        // Se ainda for um LID isolado (sem número de telefone real celular), ignorar para não criar clientes ou chats fantasmas
+        if (clientPhone.length >= 14 || clientPhone.startsWith('1686') || clientPhone.startsWith('219')) {
+          console.warn(`[WhatsApp] ⚠️ Mensagem recebida de WhatsApp LID puro (${remoteJid}). Ignorando para não poluir CRM com chaves efêmeras.`);
+          continue;
+        }
+
+        // JID de destino para envio
+        const destinationJid = `${clientPhone}@s.whatsapp.net`;
 
         // Identificar se o cliente já tem um nome cadastrado pelo fluxo/CRM
         let registeredName = null;
@@ -288,18 +303,21 @@ async function startWhatsApp() {
           const contact = (typeof dbCheck.contacts === 'object' && !Array.isArray(dbCheck.contacts)) 
             ? dbCheck.contacts[p] 
             : (Array.isArray(dbCheck.contacts) ? dbCheck.contacts.find(c => String(c?.phone || '').replace(/\D/g, '') === p) : null);
-          if (contact?.name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(contact.name.trim())) {
+          if (contact?.name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'Pitoco Bot', 'Pitoco', 'Bot', 'Assistente', 'Robô', 'Robo', 'Pitoco Atendente', 'undefined', 'null'].includes(contact.name.trim())) {
             registeredName = contact.name.trim();
             break;
           }
           const convKey = `conv-${p}`;
-          if (dbCheck.conversations?.[convKey]?.contact_name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(dbCheck.conversations[convKey].contact_name.trim())) {
+          if (dbCheck.conversations?.[convKey]?.contact_name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'Pitoco Bot', 'Pitoco', 'Bot', 'Assistente', 'Robô', 'Robo', 'Pitoco Atendente', 'undefined', 'null'].includes(dbCheck.conversations[convKey].contact_name.trim())) {
             registeredName = dbCheck.conversations[convKey].contact_name.trim();
             break;
           }
         }
 
-        const clientName = registeredName || msg.pushName || 'Cliente Pitoco';
+        let clientName = registeredName || msg.pushName || 'Cliente';
+        if (['Pitoco Bot', 'Pitoco', 'Bot', 'Assistente', 'Robô', 'Robo', 'Pitoco Atendente', 'Atendente', 'undefined', 'null'].includes(clientName.trim())) {
+          clientName = registeredName || 'Cliente';
+        }
 
         console.log(`📩 [WhatsApp Recebido] ${clientPhone} (${clientName}) [${remoteJid} -> ${destinationJid}]: "${text}"`);
 
@@ -341,13 +359,11 @@ async function startWhatsApp() {
               saveDb(dbCheck);
             } else {
               console.log(`🛡️ [Atendimento Humano Ativo] Cliente ${clientPhone} está em atendimento humano com "${convCheck.assigned_to}". Robô em pausa para não interferir.`);
-              await recordMessageLocallyAndSupabase(clientPhone, clientName, 'inbound', text);
+              recordRealMessage(clientPhone, clientName, 'inbound', text);
               continue;
             }
           }
         }
-
-        await recordMessageLocallyAndSupabase(clientPhone, clientName, 'inbound', text);
 
         // 🛡️ ANTI-BAN: Marcar mensagem como lida na telemetria oficial do WhatsApp
         try {
@@ -372,7 +388,8 @@ async function startWhatsApp() {
               const reply = replies[i];
               const replyMode = (typeof reply === 'object' && reply?.replyMode) ? reply.replyMode : 'send';
               const quotedToPass = replyMode === 'reply' ? msg : null;
-              await sendBotReply(destinationJid, reply, quotedToPass);
+              // skipRecord = true pois executePublishedFlow já gravou a mensagem via recordRealMessage com os dados corretos do cliente
+              await sendBotReply(destinationJid, reply, quotedToPass, true);
               if (i < replies.length - 1) {
                 // Intervalo natural com digitação simulada entre mensagens consecutivas do bot
                 await simulateHumanPresence(destinationJid, 20);
@@ -482,7 +499,7 @@ async function sendBotReply(destinationJid, reply, quotedMsg = null, skipRecord 
       if (ok) {
         console.log(`✅ [WhatsApp Enviado] Texto (${isSendOnly ? 'Envio Direto' : 'Com Citação'}) para ${targetJid}: "${textContent.slice(0, 50).replace(/\n/g, ' ')}..."`);
         if (!skipRecord) {
-          await recordMessageLocallyAndSupabase(cleanPhone, 'Pitoco Bot', 'outbound', textContent);
+          await recordRealMessage(cleanPhone, null, 'outbound', textContent);
         }
       }
       return ok;
@@ -512,7 +529,7 @@ async function sendBotReply(destinationJid, reply, quotedMsg = null, skipRecord 
       if (ok) {
         console.log(`✅ [WhatsApp Enviado] Menu (${buttons.length} opções) para ${targetJid}`);
         if (!skipRecord) {
-          await recordMessageLocallyAndSupabase(cleanPhone, 'Pitoco Bot', 'outbound', formatted);
+          await recordRealMessage(cleanPhone, null, 'outbound', formatted);
         }
       }
       return ok;
@@ -542,7 +559,7 @@ async function sendBotReply(destinationJid, reply, quotedMsg = null, skipRecord 
       if (ok) {
         console.log(`✅ [WhatsApp Enviado] Mídia (${mediaType}) para ${targetJid}`);
         if (!skipRecord) {
-          await recordMessageLocallyAndSupabase(cleanPhone, 'Pitoco Bot', 'outbound', caption || `[Arquivo ${mediaType}]`);
+          await recordRealMessage(cleanPhone, null, 'outbound', caption || `[Arquivo ${mediaType}]`);
         }
       }
       return ok;
@@ -561,69 +578,14 @@ async function sendWhatsAppMessage(jid, text, quotedMsg = null, skipRecord = fal
 
 async function recordMessageLocallyAndSupabase(phone, name, direction, content) {
   const cleanPhone = String(phone).replace(/\D/g, '');
-  const convId = `conv-${cleanPhone}`;
+  const isLid = cleanPhone.length >= 14 || cleanPhone.startsWith('1686') || cleanPhone.startsWith('219');
+  if (isLid) return;
 
-  try {
-    const db = loadDb();
-    if (!db.conversations) db.conversations = {};
-    if (!db.messages) db.messages = {};
+  const botNames = ['pitoco bot', 'pitoco', 'bot', 'assistente', 'robô', 'robo', 'pitoco atendente', 'atendente', 'undefined', 'null'];
+  const isBot = !name || botNames.includes(String(name).toLowerCase().trim());
+  const safeName = isBot ? null : name;
 
-    const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
-    let registeredName = null;
-    for (const p of allPhones) {
-      const c = (typeof db.contacts === 'object' && !Array.isArray(db.contacts)) 
-        ? db.contacts[p] 
-        : (Array.isArray(db.contacts) ? db.contacts.find(x => String(x?.phone || '').replace(/\D/g, '') === p) : null);
-      if (c?.name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(c.name.trim())) {
-        registeredName = c.name.trim();
-        break;
-      }
-      const cKey = `conv-${p}`;
-      if (db.conversations?.[cKey]?.contact_name && !['Cliente WhatsApp', 'Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(db.conversations[cKey].contact_name.trim())) {
-        registeredName = db.conversations[cKey].contact_name.trim();
-        break;
-      }
-    }
-
-    const prevConv = db.conversations[convId] || {};
-    const effectiveName = registeredName || (name && !['Cliente', 'Cliente Pitoco'].includes(name) ? name : (prevConv.contact_name || 'Cliente WhatsApp'));
-
-    db.conversations[convId] = {
-      ...prevConv,
-      id: convId,
-      contact_name: effectiveName,
-      contact_phone: primaryPhone || cleanPhone,
-      phone: cleanPhone,
-      last_message: content,
-      last_message_at: new Date().toISOString(),
-      status: prevConv.status || 'bot',
-      assigned_to: prevConv.assigned_to || undefined,
-      assigned_attendant_name: prevConv.assigned_attendant_name || undefined,
-      assigned_attendant_id: prevConv.assigned_attendant_id || undefined,
-      store_id: prevConv.store_id || undefined,
-      store_name: prevConv.store_name || 'Pitoco de Gente',
-      sector: prevConv.sector || undefined,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (!db.messages[convId]) db.messages[convId] = [];
-    db.messages[convId].push({
-      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      conversation_id: convId,
-      direction,
-      content,
-      sender: direction === 'inbound' ? 'user' : 'bot',
-      author_name: direction === 'inbound' ? effectiveName : 'Pitoco Bot',
-      created_at: new Date().toISOString(),
-    });
-
-    saveDb(db);
-
-    // Gravar no Supabase preservando o nome registrado
-    recordMessageInSupabase(cleanPhone, effectiveName, direction, content);
-  } catch (err) {
-    console.warn('[Storage] Erro ao salvar mensagem no db local:', err.message);
-  }
+  return recordRealMessage(cleanPhone, safeName, direction, content);
 }
 
 async function recordMessageInSupabase(phone, name, direction, content) {
@@ -1232,10 +1194,13 @@ app.get('/api/contacts', async (req, res) => {
         }
         const { data, error } = await query;
         if (!error && Array.isArray(data)) {
-          // Filtrar WhatsApp LIDs (>= 14 dígitos ou começando com 1686 / 219)
+          // Filtrar WhatsApp LIDs (>= 14 dígitos ou começando com 1686 / 219) e nomes do bot
           const validClients = data.filter(c => {
             const p = String(c.phone || '').replace(/\D/g, '');
-            return p && !(p.length >= 14 || p.startsWith('1686') || p.startsWith('219'));
+            if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) return false;
+            const name = (c.name || '').toLowerCase().trim();
+            if (name === 'pitoco bot' || name === 'bot') return false;
+            return true;
           });
           // Atualizar cache local do db.contacts para refletir a nuvem
           const cloudMap = {};
@@ -1261,7 +1226,10 @@ app.get('/api/contacts', async (req, res) => {
 
     contactsList = contactsList.filter(c => {
       const p = String(c.phone || '').replace(/\D/g, '');
-      return p && !(p.length >= 14 || p.startsWith('1686') || p.startsWith('219'));
+      if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) return false;
+      const name = (c.name || '').toLowerCase().trim();
+      if (name === 'pitoco bot' || name === 'bot') return false;
+      return true;
     });
 
     if (req.query.store_id) {
@@ -1669,6 +1637,17 @@ app.get('/api/conversations', (req, res) => {
   try {
     const db = loadDb();
     let convs = Object.values(db.conversations || {});
+
+    // 🛡️ FILTRO RIGOROSO: NUNCA retornar conversas com WhatsApp LID ou do próprio robô
+    convs = convs.filter(c => {
+      const p = String(c.contact_phone || c.phone || '').replace(/\D/g, '');
+      if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) return false;
+      if (c.id && (c.id.includes('1686') || c.id.includes('219') || c.id.length >= 19)) return false;
+      const name = (c.contact_name || '').toLowerCase().trim();
+      if (name === 'pitoco bot' || name === 'bot') return false;
+      return true;
+    });
+
     if (req.query.store_id) {
       convs = convs.filter(c => !c.store_id || c.store_id === req.query.store_id);
     }
