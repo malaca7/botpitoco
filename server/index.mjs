@@ -226,6 +226,53 @@ async function startWhatsApp() {
       }
     });
 
+    // 0. Mapeamento bidirecional dinâmico de WhatsApp LIDs <-> Telefones Reais
+    const registerLidMapping = (lid, phone) => {
+      if (!lid || !phone) return;
+      const cleanLid = String(lid).replace(/@lid$/, '').replace(/\D/g, '');
+      const cleanPhone = String(phone).replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '');
+      if (!cleanLid || !cleanPhone || cleanLid === cleanPhone) return;
+
+      if (cleanPhone.length >= 10 && cleanPhone.length <= 13 && cleanLid.length >= 14) {
+        try {
+          const db = loadDb();
+          if (!db.lid_mappings) db.lid_mappings = {};
+          if (db.lid_mappings[cleanLid] !== cleanPhone || db.lid_mappings[cleanPhone] !== cleanLid) {
+            db.lid_mappings[cleanLid] = cleanPhone;
+            db.lid_mappings[cleanPhone] = cleanLid;
+            saveDb(db);
+            console.log(`[LID Mapping] 🔗 Par mapeado: LID ${cleanLid} <-> Telefone ${cleanPhone}`);
+          }
+        } catch (e) {}
+      }
+    };
+
+    sock.ev.on('contacts.upsert', (contacts) => {
+      try {
+        for (const c of (contacts || [])) {
+          if (!c) continue;
+          if (c.lid && c.id && c.id.includes('@s.whatsapp.net')) {
+            registerLidMapping(c.lid, c.id);
+          } else if (c.phoneNumber && c.id && c.id.includes('@lid')) {
+            registerLidMapping(c.id, c.phoneNumber);
+          }
+        }
+      } catch (e) {}
+    });
+
+    sock.ev.on('contacts.update', (updates) => {
+      try {
+        for (const c of (updates || [])) {
+          if (!c) continue;
+          if (c.lid && c.id && c.id.includes('@s.whatsapp.net')) {
+            registerLidMapping(c.lid, c.id);
+          } else if (c.phoneNumber && c.id && c.id.includes('@lid')) {
+            registerLidMapping(c.id, c.phoneNumber);
+          }
+        }
+      } catch (e) {}
+    });
+
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
       // Aceita mensagens recebidas tanto como 'notify' quanto como 'append'
       for (const msg of (messages || [])) {
@@ -266,8 +313,24 @@ async function startWhatsApp() {
           } catch {}
         }
 
+        // Reconhecer mídias sem legenda para acionar fluxo
+        if (!text) {
+          if (m.audioMessage) text = '[Áudio]';
+          else if (m.imageMessage) text = '[Imagem]';
+          else if (m.videoMessage) text = '[Vídeo]';
+          else if (m.stickerMessage) text = '[Figurinha]';
+          else if (m.documentMessage) text = '[Documento]';
+          else if (m.locationMessage) text = '[Localização]';
+          else if (m.contactMessage || m.contactsArrayMessage) text = '[Contato]';
+        }
+
         const rawPhone = remoteJid.replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
         const participantPhone = (msg.key.participant || msg.participant || '').replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
+        
+        if (remoteJid.includes('@lid') && participantPhone && participantPhone.length >= 10 && participantPhone.length <= 13) {
+          registerLidMapping(rawPhone, participantPhone);
+        }
+
         const dbCheck = loadDb();
         const { primaryPhone, allPhones } = resolveLinkedPhones(rawPhone, dbCheck);
 
@@ -288,14 +351,8 @@ async function startWhatsApp() {
           }
         }
 
-        // Se ainda for um LID isolado (sem número de telefone real celular), ignorar para não criar clientes ou chats fantasmas
-        if (clientPhone.length >= 14 || clientPhone.startsWith('1686') || clientPhone.startsWith('219')) {
-          console.warn(`[WhatsApp] ⚠️ Mensagem recebida de WhatsApp LID puro (${remoteJid}). Ignorando para não poluir CRM com chaves efêmeras.`);
-          continue;
-        }
-
-        // JID de destino para envio
-        const destinationJid = `${clientPhone}@s.whatsapp.net`;
+        // JID de destino para envio: SEMPRE responder no chat de onde a mensagem veio (ex: @lid ou @s.whatsapp.net)
+        const destinationJid = remoteJid;
 
         // Identificar se o cliente já tem um nome cadastrado pelo fluxo/CRM
         let registeredName = null;
@@ -319,7 +376,7 @@ async function startWhatsApp() {
           clientName = registeredName || 'Cliente';
         }
 
-        console.log(`📩 [WhatsApp Recebido] ${clientPhone} (${clientName}) [${remoteJid} -> ${destinationJid}]: "${text}"`);
+        console.log(`📩 [WhatsApp Recebido] ${clientPhone} (${clientName}) [${remoteJid}]: "${text}"`);
 
         // 🛡️ BLINDAGEM DE ATENDIMENTO HUMANO & COMANDOS DE RETORNO AO ROBÔ
         const cleanInputLower = (text || '').toLowerCase().trim();
@@ -343,13 +400,14 @@ async function startWhatsApp() {
             saveDb(dbCheck);
           }
 
-          if (convCheck.status === 'human') {
+          if (convCheck.status === 'human' || convCheck.status === 'waiting_human') {
+            const isWaitingHuman = convCheck.status === 'waiting_human';
             const isUnassigned = !convCheck.assigned_to || convCheck.assigned_to === 'undefined' || convCheck.assigned_to === null;
             const lastAttendantTime = new Date(convCheck.last_attendant_message_at || convCheck.updated_at || 0).getTime();
             const isHumanExpired = (Date.now() - lastAttendantTime) > (15 * 60 * 1000);
 
-            if (isBotResetCmd || isUnassigned || isHumanExpired) {
-              console.log(`🤖 [Atendimento Robô] ${isBotResetCmd ? `Comando/saudação "${text}"` : (isUnassigned ? 'Sem atendente atribuído' : 'Inatividade (>15min)')} detectado. Reassumindo atendimento com o robô para ${clientPhone}.`);
+            if (isWaitingHuman || isBotResetCmd || isUnassigned || isHumanExpired) {
+              console.log(`🤖 [Atendimento Robô] ${isBotResetCmd ? `Comando/saudação "${text}"` : (isWaitingHuman ? 'Cliente na fila de espera' : (isUnassigned ? 'Sem atendente atribuído' : 'Inatividade (>15min)'))} detectado. Reassumindo atendimento com o robô para ${clientPhone}.`);
               convCheck.status = 'bot';
               convCheck.assigned_to = null;
               convCheck.assigned_attendant_name = null;
@@ -446,19 +504,14 @@ async function sendBotReply(destinationJid, reply, quotedMsg = null, skipRecord 
   
   // Respeitar a opção do nó: se o card estiver em 'send', desativar citação
   const isSendOnly = (typeof reply === 'object' && reply?.replyMode === 'send');
-  const effectiveQuoted = isSendOnly ? null : quotedMsg;
+  
+  // Só podemos citar se quotedMsg pertencer EXATAMENTE ao mesmo chat destino!
+  const canQuote = quotedMsg && quotedMsg.key?.remoteJid === destinationJid;
+  const effectiveQuoted = isSendOnly ? null : (canQuote ? quotedMsg : null);
   const sendOpts = effectiveQuoted ? { quoted: effectiveQuoted } : {};
 
-  // Se o destino for LID, buscar o telefone real em contatos/conversas
+  // O destino primário é o próprio destinationJid onde o cliente está interagindo
   let targetJid = destinationJid;
-  if (destinationJid.includes('@lid')) {
-    const db = loadDb();
-    const { primaryPhone } = resolveLinkedPhones(cleanPhone, db);
-    if (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) {
-      targetJid = `${primaryPhone}@s.whatsapp.net`;
-      console.log(`[SendReply] 🔄 Roteando resposta de LID (${destinationJid}) para Telefone Real: ${targetJid}`);
-    }
-  }
 
   const trySendMessage = async (payload) => {
     try {
@@ -471,15 +524,34 @@ async function sendBotReply(destinationJid, reply, quotedMsg = null, skipRecord 
         return true;
       } catch (err2) {
         console.error(`❌ [SendReply] Falha ao enviar para ${targetJid}:`, err2?.message || err2);
-        if (cleanPhone.length >= 10 && cleanPhone.length <= 13) {
-          const fallbackJid = `${cleanPhone}@s.whatsapp.net`;
-          if (fallbackJid !== targetJid) {
+        
+        // Se for LID e falhou, tentar enviar para o telefone real móvel correspondente se conhecido
+        if (targetJid.includes('@lid')) {
+          const db = loadDb();
+          const { primaryPhone } = resolveLinkedPhones(cleanPhone, db);
+          if (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) {
+            const fallbackPhoneJid = `${primaryPhone}@s.whatsapp.net`;
             try {
-              await sock.sendMessage(fallbackJid, payload);
-              console.log(`✅ [SendReply] Sucesso via fallback JID: ${fallbackJid}`);
+              await sock.sendMessage(fallbackPhoneJid, payload);
+              console.log(`✅ [SendReply] Sucesso via fallback JID Celular: ${fallbackPhoneJid}`);
               return true;
             } catch (err3) {
-              console.error(`❌ [SendReply] Fallback JID ${fallbackJid} falhou:`, err3?.message || err3);
+              console.error(`❌ [SendReply] Fallback JID Celular ${fallbackPhoneJid} falhou:`, err3?.message || err3);
+            }
+          }
+        } else if (targetJid.includes('@s.whatsapp.net')) {
+          // Se for telefone móvel e falhou, tentar enviar para o LID correspondente se conhecido
+          const db = loadDb();
+          const { allPhones } = resolveLinkedPhones(cleanPhone, db);
+          const lidPhone = allPhones.find(p => p.length >= 14);
+          if (lidPhone) {
+            const fallbackLidJid = `${lidPhone}@lid`;
+            try {
+              await sock.sendMessage(fallbackLidJid, payload);
+              console.log(`✅ [SendReply] Sucesso via fallback JID LID: ${fallbackLidJid}`);
+              return true;
+            } catch (err4) {
+              console.error(`❌ [SendReply] Fallback JID LID ${fallbackLidJid} falhou:`, err4?.message || err4);
             }
           }
         }

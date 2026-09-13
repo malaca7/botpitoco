@@ -72,6 +72,16 @@ export function resolveLinkedPhones(phone, db) {
     });
   }
 
+  if (db?.lid_mappings) {
+    if (db.lid_mappings[clean]) phones.add(String(db.lid_mappings[clean]).replace(/\D/g, ''));
+    for (const [k, v] of Object.entries(db.lid_mappings)) {
+      const ck = String(k).replace(/\D/g, '');
+      const cv = String(v).replace(/\D/g, '');
+      if (ck === clean && cv) phones.add(cv);
+      if (cv === clean && ck) phones.add(ck);
+    }
+  }
+
   const allPhones = Array.from(phones);
   // Priorizar telefone móvel padrão (10 a 13 dígitos) sobre o LID (15+ dígitos)
   let primaryPhone = clean;
@@ -265,61 +275,61 @@ function migrateLidContacts(db) {
 
   for (const key of Object.keys(db.contacts)) {
     if (key.length >= 14 && (key.startsWith('168') || key.startsWith('219'))) {
-      const reverseFile = path.resolve(authDir, `lid-mapping-${key}_reverse.json`);
-      if (fs.existsSync(reverseFile)) {
-        try {
-          const realPhone = String(JSON.parse(fs.readFileSync(reverseFile, 'utf8'))).replace(/\D/g, '');
-          if (realPhone && realPhone.length >= 8) {
-            const oldContact = db.contacts[key];
-            db.contacts[realPhone] = {
-              ...oldContact,
-              id: `contact-${realPhone}`,
-              phone: realPhone,
-              updated_at: new Date().toISOString(),
-            };
-            delete db.contacts[key];
+      let realPhone = null;
+      if (db.lid_mappings && db.lid_mappings[key]) {
+        realPhone = String(db.lid_mappings[key]).replace(/\D/g, '');
+      }
+      if (!realPhone) {
+        const reverseFile = path.resolve(authDir, `lid-mapping-${key}_reverse.json`);
+        if (fs.existsSync(reverseFile)) {
+          try {
+            realPhone = String(JSON.parse(fs.readFileSync(reverseFile, 'utf8'))).replace(/\D/g, '');
+          } catch (e) {}
+        }
+      }
 
-            if (db.conversations && db.conversations[`conv-${key}`]) {
-              const oldConv = db.conversations[`conv-${key}`];
-              db.conversations[`conv-${realPhone}`] = {
-                ...oldConv,
-                id: `conv-${realPhone}`,
-                contact_id: `contact-${realPhone}`,
-                contact_phone: realPhone,
-              };
-              delete db.conversations[`conv-${key}`];
-            }
-
-            if (db.messages && db.messages[`conv-${key}`]) {
-              db.messages[`conv-${realPhone}`] = db.messages[`conv-${key}`].map((m) => ({
-                ...m,
-                conversation_id: `conv-${realPhone}`,
-              }));
-              delete db.messages[`conv-${key}`];
-            }
-
-            // Migrar e vincular sessão ativa
-            if (db.sessions && db.sessions[key]) {
-              db.sessions[realPhone] = { ...(db.sessions[realPhone] || {}), ...db.sessions[key] };
-              db.sessions[key] = db.sessions[realPhone];
-            }
-
-            // Excluir LID da nuvem para evitar duplicatas no CRM
-            if (supabaseClient) {
-              supabaseClient.from('clients').delete().eq('phone', key).catch(() => {});
-              supabaseClient.from('contacts').delete().eq('phone', key).catch(() => {});
-            }
-
-            console.log(`[FlowRunner] 🔄 Contato migrado de LID ${key} para o número real: ${realPhone}`);
-          }
-        } catch (e) {}
-      } else {
-        // Remover da lista de contatos do CRM se for um LID solto
+      if (realPhone && realPhone.length >= 8) {
+        const oldContact = db.contacts[key];
+        db.contacts[realPhone] = {
+          ...oldContact,
+          id: `contact-${realPhone}`,
+          phone: realPhone,
+          updated_at: new Date().toISOString(),
+        };
         delete db.contacts[key];
+
+        if (db.conversations && db.conversations[`conv-${key}`]) {
+          const oldConv = db.conversations[`conv-${key}`];
+          db.conversations[`conv-${realPhone}`] = {
+            ...oldConv,
+            id: `conv-${realPhone}`,
+            contact_id: `contact-${realPhone}`,
+            contact_phone: realPhone,
+          };
+          delete db.conversations[`conv-${key}`];
+        }
+
+        if (db.messages && db.messages[`conv-${key}`]) {
+          db.messages[`conv-${realPhone}`] = db.messages[`conv-${key}`].map((m) => ({
+            ...m,
+            conversation_id: `conv-${realPhone}`,
+          }));
+          delete db.messages[`conv-${key}`];
+        }
+
+        // Migrar e vincular sessão ativa
+        if (db.sessions && db.sessions[key]) {
+          db.sessions[realPhone] = { ...(db.sessions[realPhone] || {}), ...db.sessions[key] };
+          db.sessions[key] = db.sessions[realPhone];
+        }
+
+        // Excluir LID da nuvem para evitar duplicatas no CRM
         if (supabaseClient) {
           supabaseClient.from('clients').delete().eq('phone', key).catch(() => {});
           supabaseClient.from('contacts').delete().eq('phone', key).catch(() => {});
         }
+
+        console.log(`[FlowRunner] 🔄 Contato migrado de LID ${key} para o número real: ${realPhone}`);
       }
     }
   }
@@ -380,6 +390,7 @@ export function loadDb() {
     auditLogs: Array.isArray(mainSource?.auditLogs) ? mainSource.auditLogs : [],
     sessions: mainSource?.sessions || {},
     rolePermissions: mainSource?.rolePermissions || {},
+    lid_mappings: mainSource?.lid_mappings || {},
   };
 
   migrateLidContacts(result);
@@ -912,11 +923,6 @@ export function recordRealMessage(phone, senderName, direction, content, explici
   const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
   const isTargetLid = targetPhone.length >= 14 || targetPhone.startsWith('1686') || targetPhone.startsWith('219');
   
-  // 🛡️ NUNCA criar contatos ou conversas para WhatsApp LIDs não vinculados
-  if (isTargetLid) {
-    return;
-  }
-
   const convId = `conv-${targetPhone}`;
   const now = new Date().toISOString();
 
@@ -926,7 +932,7 @@ export function recordRealMessage(phone, senderName, direction, content, explici
   const isBotSender = !senderName || botNames.includes(cleanSenderLower);
   const safeCustomerName = isBotSender ? '' : senderName;
 
-  // 1. Upsert Contact (Apenas para números reais de clientes)
+  // 1. Upsert Contact
   let existingContact = null;
   if (!db.contacts) db.contacts = {};
   existingContact = db.contacts[targetPhone] || {
@@ -1001,12 +1007,14 @@ export function recordRealMessage(phone, senderName, direction, content, explici
 
   saveDb(db);
 
-  // Real-time sync to Supabase Database
-  if (existingContact) {
-    syncContactToSupabase(existingContact);
+  // Real-time sync to Supabase Database (apenas para números reais de celular, sem poluir CRM com LID puro)
+  if (!isTargetLid) {
+    if (existingContact) {
+      syncContactToSupabase(existingContact);
+    }
+    syncConversationToSupabase(existingConv);
+    syncMessageToSupabase(msgObj, targetPhone);
   }
-  syncConversationToSupabase(existingConv);
-  syncMessageToSupabase(msgObj, targetPhone);
 
   recordLiveLog(
     direction === 'inbound' ? 'message_inbound' : 'message_outbound',
@@ -1512,20 +1520,20 @@ export async function getActiveFlowAndGraph(db, preferredFlowId = null, incoming
   // 1. Consultar diretamente TODOS os fluxos com status ATIVO no Supabase
   if (supabaseClient && supabaseHasFlowsTable !== false) {
     try {
-      const { data, error } = await supabaseClient
+      const { data: allSupabaseFlows, error } = await supabaseClient
         .from('flows')
-        .select('*')
-        .or('is_active.eq.true,status.eq.published');
+        .select('*');
 
       if (error && (error.code === 'PGRST205' || String(error.message || '').includes('Could not find the table'))) {
         supabaseHasFlowsTable = false;
-      } else if (!error && Array.isArray(data)) {
+      } else if (!error && Array.isArray(allSupabaseFlows)) {
         supabaseHasFlowsTable = true;
-        activeFlows = data.filter((f) => f.is_active === true || f.status === 'published');
-        // Mesclar com fluxos locais ativos
+        activeFlows = allSupabaseFlows.filter((f) => f.is_active === true || f.status === 'published');
+        // Mesclar apenas fluxos locais que NÃO existam no Supabase (ex: criados offline)
         const localActives = (db.flows || []).filter((f) => f.status === 'published' || f.is_active === true);
         for (const lf of localActives) {
-          if (!activeFlows.some(af => af.id === lf.id)) {
+          const existsInSupabase = allSupabaseFlows.some(sf => sf.id === lf.id);
+          if (!existsInSupabase && !activeFlows.some(af => af.id === lf.id)) {
             activeFlows.push(lf);
           }
         }
@@ -1911,7 +1919,8 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
       saveDb(db);
     }
 
-    if (currentConv.status === 'human') {
+    if (currentConv.status === 'human' || currentConv.status === 'waiting_human') {
+      const isWaitingHuman = currentConv.status === 'waiting_human';
       const isUnassigned = !currentConv.assigned_to || currentConv.assigned_to === 'undefined' || currentConv.assigned_to === null;
       const lastAttendantTime = new Date(currentConv.last_attendant_message_at || currentConv.updated_at || 0).getTime();
       const isHumanExpired = (Date.now() - lastAttendantTime) > (15 * 60 * 1000);
@@ -1923,8 +1932,8 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
         'voltar', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'start', 'bot'
       ].some(cmd => cleanLower === cmd || cleanTextOnly === cmd || cleanTextOnly.startsWith(`${cmd} `));
 
-      if (isKeywordMatch || isBotHandoffReturn || isUnassigned || isHumanExpired) {
-        console.log(`🤖 [FlowRunner] Retornando de atendimento humano para robô para ${cleanPhone}.`);
+      if (isWaitingHuman || isKeywordMatch || isBotHandoffReturn || isUnassigned || isHumanExpired) {
+        console.log(`🤖 [FlowRunner] Retornando de atendimento humano/espera para robô para ${cleanPhone}.`);
         currentConv.status = 'bot';
         currentConv.assigned_to = null;
         currentConv.assigned_attendant_name = null;

@@ -788,8 +788,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "human_handoff",
         "position": {
-          "x": 580,
-          "y": 3460
+          "x": 820,
+          "y": 3415
         },
         "data": {
           "label": "Transferir para Humano",
@@ -887,8 +887,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "measure_guide",
         "position": {
-          "x": 580,
-          "y": 2975
+          "x": 820,
+          "y": 2930
         },
         "data": {
           "label": "Guia de Medidas (RN a 3 Anos)",
@@ -925,8 +925,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "show_catalog",
         "position": {
-          "x": 100,
-          "y": 2975
+          "x": 340,
+          "y": 2930
         },
         "data": {
           "label": "Vitrine da Loja Virtual",
@@ -975,10 +975,6 @@
               {
                 "id": "btn_1",
                 "title": "Ver Catálogo Bebê"
-              },
-              {
-                "id": "btn_2",
-                "title": "Guia de Medidas (RN a 3 Anos)"
               },
               {
                 "id": "btn_3",
@@ -1271,6 +1267,13 @@
     ],
     "flow-pitoco-001": [
       {
+        "id": "xy-edge__node-show_catalog-1789253962865-node-human_handoff-1789176476938",
+        "flow_id": "flow-pitoco-001",
+        "source": "node-show_catalog-1789253962865",
+        "target": "node-human_handoff-1789176476938",
+        "data": {}
+      },
+      {
         "id": "xy-edge__node-question-1788893542405-node-update_contact-1788906881259",
         "flow_id": "flow-pitoco-001",
         "source": "node-question-1788893542405",
@@ -1311,13 +1314,6 @@
         "id": "xy-edge__node-measure_guide-1789176538133-node-human_handoff-1789176476938",
         "flow_id": "flow-pitoco-001",
         "source": "node-measure_guide-1789176538133",
-        "target": "node-human_handoff-1789176476938",
-        "data": {}
-      },
-      {
-        "id": "xy-edge__node-show_catalog-1789253962865-node-human_handoff-1789176476938",
-        "flow_id": "flow-pitoco-001",
-        "source": "node-show_catalog-1789253962865",
         "target": "node-human_handoff-1789176476938",
         "data": {}
       },
@@ -1426,7 +1422,7 @@
         "nome_cliente": "Malaquias"
       },
       "created_at": "2026-09-12T20:55:11.970Z",
-      "updated_at": "2026-09-13T00:12:40.066Z",
+      "updated_at": "2026-09-13T03:06:39.308Z",
       "last_interaction": "2026-09-12T20:55:11.970Z",
       "whatsapp_pushname": "Malaquias"
     },
@@ -1501,6 +1497,88 @@
       "metadata": {},
       "created_at": "2026-09-13T00:10:48.512Z",
       "updated_at": "2026-09-13T00:12:37.439Z"
+    },
+    "5581988887777": {
+      "id": "contact-5581988887777",
+      "store_id": null,
+      "store_name": null,
+      "name": "Jack Teste",
+      "phone": "5581988887777",
+      "email": null,
+      "address": null,
+      "city": null,
+      "cep": null,
+      "notes": null,
+      "baby_name": null,
+      "due_date": null,
+      "total_orders": 0,
+      "total_spent": 0,
+      "tags": [
+        "Lead"
+      ],
+      "last_interaction": "2026-09-13T01:26:36.328+00:00",
+      "created_at": "2026-09-13T01:26:48.643857+00:00",
+      "updated_at": "2026-09-13T03:06:39.962Z",
+      "whatsapp_pushname": "Cliente Audio"
+    },
+    "5581999998888": {
+      "id": "contact-5581999998888",
+      "store_id": null,
+      "store_name": null,
+      "name": "Maria Teste",
+      "phone": "5581999998888",
+      "email": null,
+      "address": null,
+      "city": null,
+      "cep": null,
+      "notes": null,
+      "baby_name": null,
+      "due_date": null,
+      "total_orders": 0,
+      "total_spent": 0,
+      "tags": [
+        "Lead"
+      ],
+      "last_interaction": "2026-09-13T02:55:52.287+00:00",
+      "created_at": "2026-09-13T02:56:07.863415+00:00",
+      "updated_at": "2026-09-13T02:56:55.620Z",
+      "whatsapp_pushname": "Maria Teste"
+    },
+    "5581977776666": {
+      "id": "contact-5581977776666",
+      "name": "Ana Clara",
+      "phone": "5581977776666",
+      "tags": [
+        "Lead",
+        "Cliente",
+        "Cliente WhatsApp",
+        "Bot"
+      ],
+      "status": "active",
+      "is_registered": true,
+      "notes": "Cadastrado e atualizado pelo fluxo do bot",
+      "custom_fields": {
+        "nome_cliente": "Ana Clara",
+        "nome_clientenovo": "Ana Clara"
+      },
+      "created_at": "2026-09-13T02:57:11.857Z",
+      "last_interaction": "2026-09-13T02:57:13.821Z",
+      "updated_at": "2026-09-13T02:57:14.430Z",
+      "whatsapp_pushname": "Cliente Novo"
+    },
+    "168699999999999": {
+      "id": "contact-168699999999999",
+      "phone": "168699999999999",
+      "name": "Cliente Novo Lid",
+      "whatsapp_pushname": "Cliente Novo LID",
+      "status": "lead",
+      "tags": [
+        "Lead"
+      ],
+      "is_registered": false,
+      "metadata": {},
+      "created_at": "2026-09-13T03:06:38.377Z",
+      "updated_at": "2026-09-13T03:06:38.377Z"
     }
   },
   "conversations": {
@@ -1508,13 +1586,13 @@
       "id": "conv-558196138924",
       "contact_name": "Malaquias",
       "contact_phone": "558196138924",
-      "phone": "168650497613858",
-      "last_message": "Você escolheu a *Loja Matriz — Centro*, seu atendimento será personalizado para essa loja, o que você deseja:",
-      "last_message_at": "2026-09-13T00:12:40.066Z",
+      "phone": "558196138924",
+      "last_message": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+      "last_message_at": "2026-09-13T03:06:39.308Z",
       "status": "bot",
       "store_name": "Pitoco de Gente",
       "contact_id": "contact-558196138924",
-      "updated_at": "2026-09-13T00:12:40.066Z",
+      "updated_at": "2026-09-13T03:06:39.308Z",
       "started_at": "2026-09-12T23:43:39.112Z",
       "unread_count": 0,
       "created_at": "2026-09-12T23:43:39.112Z"
@@ -1574,6 +1652,66 @@
       "last_message": "Mensagem Interativa",
       "last_message_at": "2026-09-13T00:12:37.439Z",
       "updated_at": "2026-09-13T00:12:37.439Z"
+    },
+    "conv-5581988887777": {
+      "id": "conv-5581988887777",
+      "contact_id": "contact-5581988887777",
+      "contact_name": "Jack Teste",
+      "contact_phone": "5581988887777",
+      "phone": "5581988887777",
+      "status": "bot",
+      "store_name": "Pitoco de Gente",
+      "started_at": "2026-09-13T01:26:37.300Z",
+      "unread_count": 0,
+      "created_at": "2026-09-13T01:26:37.300Z",
+      "last_message": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+      "last_message_at": "2026-09-13T03:06:39.962Z",
+      "updated_at": "2026-09-13T03:06:39.962Z"
+    },
+    "conv-5581999998888": {
+      "id": "conv-5581999998888",
+      "contact_id": "contact-5581999998888",
+      "contact_name": "Maria Teste",
+      "contact_phone": "5581999998888",
+      "phone": "5581999998888",
+      "status": "bot",
+      "store_name": "Pitoco de Gente",
+      "started_at": "2026-09-13T02:55:53.204Z",
+      "unread_count": 0,
+      "created_at": "2026-09-13T02:55:53.204Z",
+      "last_message": "Você escolheu a *Loja Matriz — Centro*, seu atendimento será personalizado para essa loja, o que você deseja:",
+      "last_message_at": "2026-09-13T02:56:55.620Z",
+      "updated_at": "2026-09-13T02:56:55.620Z"
+    },
+    "conv-5581977776666": {
+      "id": "conv-5581977776666",
+      "contact_id": "contact-5581977776666",
+      "contact_name": "Ana Clara",
+      "contact_phone": "5581977776666",
+      "phone": "5581977776666",
+      "status": "bot",
+      "store_name": "Pitoco de Gente",
+      "started_at": "2026-09-13T02:57:11.857Z",
+      "unread_count": 0,
+      "created_at": "2026-09-13T02:57:11.857Z",
+      "last_message": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+      "last_message_at": "2026-09-13T02:57:14.430Z",
+      "updated_at": "2026-09-13T02:57:14.430Z"
+    },
+    "conv-168699999999999": {
+      "id": "conv-168699999999999",
+      "contact_id": "contact-168699999999999",
+      "contact_name": "Cliente Novo Lid",
+      "contact_phone": "168699999999999",
+      "phone": "168699999999999",
+      "status": "bot",
+      "store_name": "Pitoco de Gente",
+      "started_at": "2026-09-13T03:06:38.377Z",
+      "unread_count": 0,
+      "created_at": "2026-09-13T03:06:38.377Z",
+      "last_message": "Mensagem Interativa",
+      "last_message_at": "2026-09-13T03:06:38.377Z",
+      "updated_at": "2026-09-13T03:06:38.377Z"
     }
   },
   "messages": {
@@ -1838,6 +1976,87 @@
         "content": "Você escolheu a *Loja Matriz — Centro*, seu atendimento será personalizado para essa loja, o que você deseja:",
         "status": "delivered",
         "created_at": "2026-09-13T00:12:40.066Z"
+      },
+      {
+        "id": "msg-1789268305520-rnz09",
+        "conversation_id": "conv-558196138924",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:58:25.520Z"
+      },
+      {
+        "id": "msg-1789268305541-h3v57",
+        "conversation_id": "conv-558196138924",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:58:25.541Z"
+      },
+      {
+        "id": "msg-1789268305561-cwhru",
+        "conversation_id": "conv-558196138924",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:58:25.561Z"
+      },
+      {
+        "id": "msg-1789268340500-sciar",
+        "conversation_id": "conv-558196138924",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Você escolheu a *Loja Matriz — Centro*, seu atendimento será personalizado para essa loja, o que você deseja:",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:59:00.500Z"
+      },
+      {
+        "id": "msg-1789268357673-j25dg",
+        "conversation_id": "conv-558196138924",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "🍼 *PITOCO DE GENTE — Moda Bebê & Enxovais*\nConfira nossos destaques mais amados:\n\n• *Body Suedine 100% Algodão*\n   💰 R$ 49,90 • 👶 RN a GG (Cores Lisas & Estampadas)\n\n• *Macacão Confort Zíper Duplo*\n   💰 R$ 89,90 • 👶 RN ao 3 Anos (Proteção no Queixo)\n\n• *Saída Maternidade Tricot Luxo (5 Peças)*\n   💰 R$ 199,90 • 👶 RN e P (Macacão + Manta + Body + Faixinha)\n\n• *Kit de Berço 9 Peças 200 Fios*\n   💰 R$ 389,00 • 🛏️ Padrão Americano (100% Algodão Hipoalergênico)\n\n_Para pedir ou verificar tamanhos (RN a 3 anos), basta nos chamar!_",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:59:17.673Z"
+      },
+      {
+        "id": "msg-1789268357708-grzhk",
+        "conversation_id": "conv-558196138924",
+        "direction": "outbound",
+        "message_type": "text",
+        "content": "Você foi transferido para um de nossos atendentes humanos.",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:59:17.708Z"
+      },
+      {
+        "id": "msg-1789268799281-j4mxc",
+        "conversation_id": "conv-558196138924",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T03:06:39.281Z"
+      },
+      {
+        "id": "msg-1789268799293-mncti",
+        "conversation_id": "conv-558196138924",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T03:06:39.293Z"
+      },
+      {
+        "id": "msg-1789268799308-jhvpl",
+        "conversation_id": "conv-558196138924",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-13T03:06:39.308Z"
       }
     ],
     "conv-5581999991234": [
@@ -2675,6 +2894,120 @@
         "content": "🏁 *Atendimento finalizado com sucesso!*\n\nSe precisar de algo mais, basta nos enviar uma nova mensagem. Até logo!",
         "status": "delivered",
         "created_at": "2026-09-13T01:26:47.847Z"
+      },
+      {
+        "id": "msg-1789268799940-01zij",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T03:06:39.940Z"
+      },
+      {
+        "id": "msg-1789268799951-4hvsl",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T03:06:39.951Z"
+      },
+      {
+        "id": "msg-1789268799962-3tezz",
+        "conversation_id": "conv-5581988887777",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-13T03:06:39.962Z"
+      }
+    ],
+    "conv-5581999998888": [
+      {
+        "id": "msg-1789268153204-w67vl",
+        "conversation_id": "conv-5581999998888",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:55:53.204Z"
+      },
+      {
+        "id": "msg-1789268153216-00ver",
+        "conversation_id": "conv-5581999998888",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:55:53.216Z"
+      },
+      {
+        "id": "msg-1789268153233-gofuq",
+        "conversation_id": "conv-5581999998888",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:55:53.233Z"
+      },
+      {
+        "id": "msg-1789268215620-h2so3",
+        "conversation_id": "conv-5581999998888",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Você escolheu a *Loja Matriz — Centro*, seu atendimento será personalizado para essa loja, o que você deseja:",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:56:55.620Z"
+      }
+    ],
+    "conv-5581977776666": [
+      {
+        "id": "msg-1789268231857-jadoc",
+        "conversation_id": "conv-5581977776666",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:57:11.857Z"
+      },
+      {
+        "id": "msg-1789268234381-rbx1m",
+        "conversation_id": "conv-5581977776666",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:57:14.381Z"
+      },
+      {
+        "id": "msg-1789268234405-9fe9c",
+        "conversation_id": "conv-5581977776666",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:57:14.405Z"
+      },
+      {
+        "id": "msg-1789268234430-6gk8f",
+        "conversation_id": "conv-5581977776666",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
+        "status": "delivered",
+        "created_at": "2026-09-13T02:57:14.430Z"
+      }
+    ],
+    "conv-168699999999999": [
+      {
+        "id": "msg-1789268798377-9l3dh",
+        "conversation_id": "conv-168699999999999",
+        "direction": "outbound",
+        "message_type": "button",
+        "content": "Opções Interativas",
+        "status": "delivered",
+        "created_at": "2026-09-13T03:06:38.377Z"
       }
     ]
   },
@@ -3208,50 +3541,6 @@
         }
       ]
     },
-    "558196138924": {
-      "flowId": "flow-pitoco-001",
-      "currentNodeId": "node-buttons-1788914057467",
-      "variables": {
-        "whatsapp_pushname": "Malaquias",
-        "telefone_cliente": "558196138924",
-        "telefone_whatsapp": "558196138924",
-        "ultima_mensagem": "1",
-        "nome_cliente": "Malaquias",
-        "is_primeiro_contato": false,
-        "is_novo_contato": false,
-        "is_existing_contact": true,
-        "tipo_cliente": "recorrente",
-        "nome_clientenovo": "Malaquias",
-        "cliente_nome": "Malaquias",
-        "nome": "Malaquias",
-        "primeiro_nome": "Malaquias",
-        "tags_contato": "Lead, Cliente, Cliente WhatsApp, Bot",
-        "opcao_selecionada": "Loja Matriz — Centro",
-        "botao_id": "store-001",
-        "loja_escolhida": "Loja Matriz — Centro",
-        "loja_id": "store-001",
-        "loja_nome": "Loja Matriz — Centro",
-        "loja_whatsapp": "81987300915",
-        "resposta_usuario": "Loja Matriz — Centro"
-      },
-      "lastFlowTriggerAt": 1789258360059,
-      "waitingForVar": null,
-      "lastInteractionAt": 1789258360059,
-      "activeButtons": [
-        {
-          "id": "btn_1",
-          "title": "Ver Catálogo Bebê"
-        },
-        {
-          "id": "btn_2",
-          "title": "Guia de Medidas (RN a 3 Anos)"
-        },
-        {
-          "id": "btn_3",
-          "title": "Falar com Atendente"
-        }
-      ]
-    },
     "5581911112222": {
       "flowId": "flow-pitoco-001",
       "currentNodeId": "node-store_selector-1788913989382",
@@ -3301,22 +3590,272 @@
           "storeName": "Loja Ipojuca - Filial"
         }
       ]
+    },
+    "5581988887777": {
+      "flowId": "flow-pitoco-001",
+      "flowStatus": "in_progress",
+      "currentNodeId": "node-store_selector-1788913989382",
+      "variables": {
+        "whatsapp_pushname": "Cliente Audio",
+        "telefone_cliente": "5581988887777",
+        "telefone_whatsapp": "5581988887777",
+        "ultima_mensagem": "[Áudio]",
+        "nome_cliente": "Jack Teste",
+        "is_primeiro_contato": false,
+        "is_novo_contato": false,
+        "is_existing_contact": true,
+        "tipo_cliente": "recorrente",
+        "cliente_nome": "Jack Teste",
+        "nome": "Jack Teste",
+        "primeiro_nome": "Jack",
+        "tags_contato": "Lead"
+      },
+      "lastFlowTriggerAt": 1789268799934,
+      "lastInteractionAt": 1789268799934,
+      "waitingForVar": null,
+      "activeButtons": [
+        {
+          "id": "store-001",
+          "title": "Matriz — Centro",
+          "storeId": "store-001",
+          "slug": "matriz",
+          "storeName": "Loja Matriz — Centro"
+        },
+        {
+          "id": "store-002",
+          "title": "Ipojuca - Filial",
+          "storeId": "store-002",
+          "slug": "ipojuca",
+          "storeName": "Loja Ipojuca - Filial"
+        }
+      ],
+      "completedAt": 1789262807781
+    },
+    "5581999998888": {
+      "flowId": "flow-pitoco-001",
+      "flowStatus": "in_progress",
+      "currentNodeId": "node-buttons-1788914057467",
+      "variables": {
+        "whatsapp_pushname": "Maria Teste",
+        "telefone_cliente": "5581999998888",
+        "telefone_whatsapp": "5581999998888",
+        "ultima_mensagem": "1",
+        "nome_cliente": "Maria Teste",
+        "is_primeiro_contato": false,
+        "is_novo_contato": false,
+        "is_existing_contact": true,
+        "tipo_cliente": "recorrente",
+        "cliente_nome": "Maria Teste",
+        "nome": "Maria Teste",
+        "primeiro_nome": "Maria",
+        "tags_contato": "Lead",
+        "opcao_selecionada": "Loja Matriz — Centro",
+        "botao_id": "store-001",
+        "loja_escolhida": "Loja Matriz — Centro",
+        "loja_id": "store-001",
+        "loja_nome": "Loja Matriz — Centro",
+        "loja_whatsapp": "81987300915",
+        "resposta_usuario": "Loja Matriz — Centro"
+      },
+      "lastFlowTriggerAt": 1789268215613,
+      "lastInteractionAt": 1789268215613,
+      "waitingForVar": null,
+      "activeButtons": [
+        {
+          "id": "btn_1",
+          "title": "Ver Catálogo Bebê"
+        },
+        {
+          "id": "btn_3",
+          "title": "Falar com Atendente"
+        }
+      ]
+    },
+    "5581977776666": {
+      "flowId": "flow-pitoco-001",
+      "flowStatus": "in_progress",
+      "currentNodeId": "node-store_selector-1788913989382",
+      "variables": {
+        "whatsapp_pushname": "Cliente Novo",
+        "telefone_cliente": "5581977776666",
+        "telefone_whatsapp": "5581977776666",
+        "ultima_mensagem": "Ana Clara",
+        "nome_cliente": "Ana Clara",
+        "is_primeiro_contato": false,
+        "is_novo_contato": false,
+        "is_existing_contact": true,
+        "tipo_cliente": "novo",
+        "nome_clientenovo": "Ana Clara",
+        "{{nome_clientenovo}}": "Ana Clara",
+        "resposta_usuario": "Ana Clara",
+        "{{nome_cliente}}": "Ana Clara",
+        "cliente_nome": "Ana Clara",
+        "{{cliente_nome}}": "Ana Clara",
+        "nome": "Ana Clara",
+        "{{nome}}": "Ana Clara",
+        "primeiro_nome": "Ana",
+        "{{primeiro_nome}}": "Ana",
+        "{{resposta_usuario}}": "Ana Clara",
+        "cliente_telefone": "5581977776666",
+        "cliente_salvo": true,
+        "cliente_id": "contact-5581977776666",
+        "cliente_foto": "",
+        "foto_cliente": ""
+      },
+      "lastFlowTriggerAt": 1789268233812,
+      "lastInteractionAt": 1789268233812,
+      "waitingForVar": null,
+      "activeButtons": [
+        {
+          "id": "store-001",
+          "title": "Matriz — Centro",
+          "storeId": "store-001",
+          "slug": "matriz",
+          "storeName": "Loja Matriz — Centro"
+        },
+        {
+          "id": "store-002",
+          "title": "Ipojuca - Filial",
+          "storeId": "store-002",
+          "slug": "ipojuca",
+          "storeName": "Loja Ipojuca - Filial"
+        }
+      ]
+    },
+    "168650497613858": {
+      "flowId": "flow-pitoco-001",
+      "currentNodeId": "node-store_selector-1788913989382",
+      "variables": {
+        "whatsapp_pushname": "Malaquias",
+        "telefone_cliente": "558196138924",
+        "telefone_whatsapp": "558196138924",
+        "ultima_mensagem": "menu",
+        "nome_cliente": "Malaquias",
+        "is_primeiro_contato": false,
+        "is_novo_contato": false,
+        "is_existing_contact": true,
+        "tipo_cliente": "recorrente",
+        "nome_clientenovo": "Malaquias",
+        "cliente_nome": "Malaquias",
+        "nome": "Malaquias",
+        "primeiro_nome": "Malaquias",
+        "tags_contato": "Lead, Cliente, Cliente WhatsApp, Bot",
+        "opcao_selecionada": "Ver Catálogo Bebê",
+        "botao_id": "btn_1",
+        "loja_escolhida": "Loja Matriz — Centro",
+        "loja_id": "store-001",
+        "loja_nome": "Loja Matriz — Centro",
+        "loja_whatsapp": "81987300915",
+        "resposta_usuario": "Loja Matriz — Centro",
+        "catalogo_produtos": "🍼 *PITOCO DE GENTE — Moda Bebê & Enxovais*\nConfira nossos destaques mais amados:\n\n• *Body Suedine 100% Algodão*\n   💰 R$ 49,90 • 👶 RN a GG (Cores Lisas & Estampadas)\n\n• *Macacão Confort Zíper Duplo*\n   💰 R$ 89,90 • 👶 RN ao 3 Anos (Proteção no Queixo)\n\n• *Saída Maternidade Tricot Luxo (5 Peças)*\n   💰 R$ 199,90 • 👶 RN e P (Macacão + Manta + Body + Faixinha)\n\n• *Kit de Berço 9 Peças 200 Fios*\n   💰 R$ 389,00 • 🛏️ Padrão Americano (100% Algodão Hipoalergênico)\n\n_Para pedir ou verificar tamanhos (RN a 3 anos), basta nos chamar!_"
+      },
+      "lastFlowTriggerAt": 1789268799274,
+      "waitingForVar": null,
+      "lastInteractionAt": 1789268799274,
+      "activeButtons": [
+        {
+          "id": "store-001",
+          "title": "Matriz — Centro",
+          "storeId": "store-001",
+          "slug": "matriz",
+          "storeName": "Loja Matriz — Centro"
+        },
+        {
+          "id": "store-002",
+          "title": "Ipojuca - Filial",
+          "storeId": "store-002",
+          "slug": "ipojuca",
+          "storeName": "Loja Ipojuca - Filial"
+        }
+      ],
+      "flowStatus": "in_progress",
+      "completedAt": 1789268357660
+    },
+    "168699999999999": {
+      "flowId": "flow-pitoco-001",
+      "flowStatus": "in_progress",
+      "currentNodeId": "node-question-1788893542405",
+      "variables": {
+        "whatsapp_pushname": "Cliente Novo LID",
+        "telefone_cliente": "168699999999999",
+        "telefone_whatsapp": "168699999999999",
+        "ultima_mensagem": "Olá, gostaria de ajuda",
+        "nome_cliente": "",
+        "is_primeiro_contato": true,
+        "is_novo_contato": true,
+        "is_existing_contact": false,
+        "tipo_cliente": "novo"
+      },
+      "lastFlowTriggerAt": 1789268797726,
+      "lastInteractionAt": 1789268797726,
+      "waitingForVar": "nome_clientenovo",
+      "activeButtons": null
+    },
+    "558196138924": {
+      "flowId": "flow-pitoco-001",
+      "currentNodeId": "node-store_selector-1788913989382",
+      "variables": {
+        "whatsapp_pushname": "Malaquias",
+        "telefone_cliente": "558196138924",
+        "telefone_whatsapp": "558196138924",
+        "ultima_mensagem": "menu",
+        "nome_cliente": "Malaquias",
+        "is_primeiro_contato": false,
+        "is_novo_contato": false,
+        "is_existing_contact": true,
+        "tipo_cliente": "recorrente",
+        "nome_clientenovo": "Malaquias",
+        "cliente_nome": "Malaquias",
+        "nome": "Malaquias",
+        "primeiro_nome": "Malaquias",
+        "tags_contato": "Lead, Cliente, Cliente WhatsApp, Bot",
+        "opcao_selecionada": "Ver Catálogo Bebê",
+        "botao_id": "btn_1",
+        "loja_escolhida": "Loja Matriz — Centro",
+        "loja_id": "store-001",
+        "loja_nome": "Loja Matriz — Centro",
+        "loja_whatsapp": "81987300915",
+        "resposta_usuario": "Loja Matriz — Centro",
+        "catalogo_produtos": "🍼 *PITOCO DE GENTE — Moda Bebê & Enxovais*\nConfira nossos destaques mais amados:\n\n• *Body Suedine 100% Algodão*\n   💰 R$ 49,90 • 👶 RN a GG (Cores Lisas & Estampadas)\n\n• *Macacão Confort Zíper Duplo*\n   💰 R$ 89,90 • 👶 RN ao 3 Anos (Proteção no Queixo)\n\n• *Saída Maternidade Tricot Luxo (5 Peças)*\n   💰 R$ 199,90 • 👶 RN e P (Macacão + Manta + Body + Faixinha)\n\n• *Kit de Berço 9 Peças 200 Fios*\n   💰 R$ 389,00 • 🛏️ Padrão Americano (100% Algodão Hipoalergênico)\n\n_Para pedir ou verificar tamanhos (RN a 3 anos), basta nos chamar!_"
+      },
+      "lastFlowTriggerAt": 1789268799274,
+      "waitingForVar": null,
+      "lastInteractionAt": 1789268799274,
+      "activeButtons": [
+        {
+          "id": "store-001",
+          "title": "Matriz — Centro",
+          "storeId": "store-001",
+          "slug": "matriz",
+          "storeName": "Loja Matriz — Centro"
+        },
+        {
+          "id": "store-002",
+          "title": "Ipojuca - Filial",
+          "storeId": "store-002",
+          "slug": "ipojuca",
+          "storeName": "Loja Ipojuca - Filial"
+        }
+      ],
+      "flowStatus": "in_progress",
+      "completedAt": 1789268357660
     }
   },
   "rolePermissions": {},
+  "lid_mappings": {},
   "logs": [
     {
-      "id": "log-1789262807857-669sc",
+      "id": "log-1789268799971-l50d7",
       "type": "message_outbound",
-      "title": "Resposta para Jack Teste",
-      "description": "🏁 *Atendimento finalizado com sucesso!*\n\nSe precisar de algo mais, basta nos enviar uma n...",
+      "title": "Resposta para Cliente Audio",
+      "description": "Mensagem Interativa",
       "contact_phone": "5581988887777",
-      "contact_name": "Jack Teste",
+      "contact_name": "Cliente Audio",
       "details": {
         "direction": "outbound",
-        "messageId": "msg-1789262807847-xphsc"
+        "messageId": "msg-1789268799962-3tezz"
       },
-      "created_at": "2026-09-13T01:26:47.857Z"
+      "created_at": "2026-09-13T03:06:39.971Z"
     }
   ]
 }
