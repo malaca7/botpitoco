@@ -760,13 +760,19 @@ export const StorageService = {
   // 5. CRM & CLIENTES
   // ==============================================================================
   async getContacts(storeId?: string): Promise<Contact[]> {
+    const isLid = (p?: string) => {
+      const clean = String(p || '').replace(/\D/g, '');
+      return !clean || clean.length >= 14 || clean.startsWith('1686') || clean.startsWith('219');
+    };
+
     // 1. Tentar carregar do Supabase (Fonte Central da Verdade)
     if (SupabaseService.isSupabaseReady) {
       try {
         const dbClients = await SupabaseService.getClients(storeId);
         if (Array.isArray(dbClients)) {
-          setItem(STORAGE_KEYS.CONTACTS, dbClients);
-          return dbClients;
+          const cleanClients = dbClients.filter(c => !isLid(c.phone));
+          setItem(STORAGE_KEYS.CONTACTS, cleanClients);
+          return cleanClients;
         }
       } catch (err) {
         console.warn('[Storage] Supabase getClients error:', err);
@@ -780,22 +786,31 @@ export const StorageService = {
       if (res && res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          setItem(STORAGE_KEYS.CONTACTS, data);
-          return data;
+          const cleanClients = data.filter((c: any) => !isLid(c.phone));
+          setItem(STORAGE_KEYS.CONTACTS, cleanClients);
+          return cleanClients;
         }
       }
     } catch {}
 
     // 3. Fallback apenas para o localStorage sem injetar dados fictícios!
     let contacts = getItem<Contact[]>(STORAGE_KEYS.CONTACTS, []);
-    if (storeId && Array.isArray(contacts)) {
-      contacts = contacts.filter(c => !c.store_id || c.store_id === storeId);
+    if (Array.isArray(contacts)) {
+      contacts = contacts.filter(c => {
+        if (isLid(c.phone)) return false;
+        return !storeId || !c.store_id || c.store_id === storeId;
+      });
     }
     return contacts || [];
   },
 
   async saveContact(contact: Partial<Contact>): Promise<Contact> {
     const cleanPhone = String(contact.phone || '').replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length >= 14 || cleanPhone.startsWith('1686') || cleanPhone.startsWith('219')) {
+      console.warn('[Storage] Ignorando salvamento de WhatsApp LID no CRM:', cleanPhone);
+      return contact as Contact;
+    }
+
     const newContact: Contact = {
       id: contact.id || `client-${cleanPhone}`,
       phone: cleanPhone,

@@ -687,26 +687,33 @@ export async function getClients(storeId?: string): Promise<Contact[]> {
     const { data, error } = await query.order('updated_at', { ascending: false });
     if (error) throw error;
     if (Array.isArray(data)) {
-      return data.map((c: any) => ({
-        id: c.id,
-        name: c.name || 'Cliente WhatsApp',
-        phone: c.phone || '',
-        email: c.email || undefined,
-        address: c.address || undefined,
-        city: c.city || undefined,
-        notes: c.notes || undefined,
-        baby_name: c.baby_name || undefined,
-        due_date: c.due_date || undefined,
-        store_id: c.store_id || undefined,
-        store_name: c.store_name || undefined,
-        status: (c.status || 'active') as 'active' | 'blocked' | 'archived',
-        tags: Array.isArray(c.tags) ? c.tags : ['Cliente WhatsApp'],
-        total_orders: Number(c.total_orders) || 0,
-        total_spent: Number(c.total_spent) || 0,
-        last_interaction: c.last_interaction || c.updated_at || new Date().toISOString(),
-        created_at: c.created_at || new Date().toISOString(),
-        updated_at: c.updated_at || new Date().toISOString(),
-      }));
+      return data
+        .filter((c: any) => {
+          const p = String(c.phone || '').replace(/\D/g, '');
+          // NUNCA exibir WhatsApp LIDs (>= 14 dígitos ou começando com 1686/219)
+          if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) return false;
+          return true;
+        })
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name || 'Cliente WhatsApp',
+          phone: c.phone || '',
+          email: c.email || undefined,
+          address: c.address || undefined,
+          city: c.city || undefined,
+          notes: c.notes || undefined,
+          baby_name: c.baby_name || undefined,
+          due_date: c.due_date || undefined,
+          store_id: c.store_id || undefined,
+          store_name: c.store_name || undefined,
+          status: (c.status || 'active') as 'active' | 'blocked' | 'archived',
+          tags: Array.isArray(c.tags) ? c.tags : ['Cliente WhatsApp'],
+          total_orders: Number(c.total_orders) || 0,
+          total_spent: Number(c.total_spent) || 0,
+          last_interaction: c.last_interaction || c.updated_at || new Date().toISOString(),
+          created_at: c.created_at || new Date().toISOString(),
+          updated_at: c.updated_at || new Date().toISOString(),
+        }));
     }
   } catch (err) {
     console.warn('[Supabase] getClients error:', err);
@@ -767,6 +774,11 @@ export async function saveClient(contact: Partial<Contact>): Promise<Contact | n
   try {
     const cleanPhone = String(contact.phone || '').replace(/\D/g, '');
     if (!cleanPhone) return null;
+    const isLid = cleanPhone.length >= 14 || cleanPhone.startsWith('1686') || cleanPhone.startsWith('219');
+    if (isLid) {
+      console.warn('[Supabase] Ignorando salvamento de WhatsApp LID no banco de clientes:', cleanPhone);
+      return null;
+    }
     const clientId = contact.id || `contact-${cleanPhone}`;
     const payload = {
       id: clientId,

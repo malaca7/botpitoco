@@ -630,18 +630,21 @@ async function recordMessageInSupabase(phone, name, direction, content) {
   if (!supabaseServer) return;
   try {
     const cleanPhone = String(phone).replace(/\D/g, '');
-    const convId = `conv-${cleanPhone}`;
+    const isLid = cleanPhone.length >= 14 || cleanPhone.startsWith('1686') || cleanPhone.startsWith('219');
 
-    const clientPayload = {
-      id: `client-${cleanPhone}`,
-      phone: cleanPhone,
-      last_interaction: new Date().toISOString(),
-    };
-    if (name && !['Cliente', 'Cliente Pitoco', 'undefined', 'null'].includes(name)) {
-      clientPayload.name = name;
+    // NUNCA inserir WhatsApp LID na tabela clients
+    if (!isLid) {
+      const clientPayload = {
+        id: `client-${cleanPhone}`,
+        phone: cleanPhone,
+        last_interaction: new Date().toISOString(),
+      };
+      if (name && !['Cliente', 'Cliente Pitoco', 'undefined', 'null', 'Cliente WhatsApp'].includes(name)) {
+        clientPayload.name = name;
+      }
+
+      await safeSupa(supabaseServer.from('clients').upsert(clientPayload, { onConflict: 'phone' }));
     }
-
-    await safeSupa(supabaseServer.from('clients').upsert(clientPayload, { onConflict: 'phone' }));
 
     await safeSupa(supabaseServer.from('conversations').upsert({
       id: convId,
@@ -1229,15 +1232,20 @@ app.get('/api/contacts', async (req, res) => {
         }
         const { data, error } = await query;
         if (!error && Array.isArray(data)) {
+          // Filtrar WhatsApp LIDs (>= 14 dígitos ou começando com 1686 / 219)
+          const validClients = data.filter(c => {
+            const p = String(c.phone || '').replace(/\D/g, '');
+            return p && !(p.length >= 14 || p.startsWith('1686') || p.startsWith('219'));
+          });
           // Atualizar cache local do db.contacts para refletir a nuvem
           const cloudMap = {};
-          data.forEach(c => {
+          validClients.forEach(c => {
             const p = String(c.phone || '').replace(/\D/g, '');
             if (p) cloudMap[p] = c;
           });
           db.contacts = cloudMap;
           saveDb(db);
-          return res.json(data);
+          return res.json(validClients);
         }
       } catch (cloudErr) {
         console.warn('[Contacts API] Falha ao consultar Supabase, usando cache local:', cloudErr.message);
@@ -1250,6 +1258,11 @@ app.get('/api/contacts', async (req, res) => {
     } else if (db.contacts && typeof db.contacts === 'object') {
       contactsList = Object.values(db.contacts);
     }
+
+    contactsList = contactsList.filter(c => {
+      const p = String(c.phone || '').replace(/\D/g, '');
+      return p && !(p.length >= 14 || p.startsWith('1686') || p.startsWith('219'));
+    });
 
     if (req.query.store_id) {
       contactsList = contactsList.filter(c => !c.store_id || c.store_id === req.query.store_id);
@@ -1275,6 +1288,7 @@ app.post('/api/contacts', async (req, res) => {
 
     const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
     const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
+    const isTargetLid = targetPhone.length >= 14 || targetPhone.startsWith('1686') || targetPhone.startsWith('219');
 
     const newContact = {
       id: data.id || `contact-${targetPhone}`,
@@ -1297,21 +1311,39 @@ app.post('/api/contacts', async (req, res) => {
     };
 
     if (!db.contacts) db.contacts = {};
-    for (const p of allPhones) {
+
+    // Salvar APENAS no telefone real (nunca em LID)
+    if (!isTargetLid) {
       if (Array.isArray(db.contacts)) {
-        const idx = db.contacts.findIndex(c => String(c.phone || '').replace(/\D/g, '') === p);
-        if (idx >= 0) db.contacts[idx] = { ...db.contacts[idx], ...newContact, phone: p };
-        else db.contacts.push({ ...newContact, phone: p });
+        const idx = db.contacts.findIndex(c => String(c.phone || '').replace(/\D/g, '') === targetPhone);
+        if (idx >= 0) db.contacts[idx] = { ...db.contacts[idx], ...newContact, phone: targetPhone };
+        else db.contacts.push({ ...newContact, phone: targetPhone });
       } else {
-        db.contacts[p] = { ...(db.contacts[p] || {}), ...newContact, phone: p };
+        db.contacts[targetPhone] = { ...(db.contacts[targetPhone] || {}), ...newContact, phone: targetPhone };
       }
 
-      if (db.conversations && db.conversations[`conv-${p}`]) {
-        db.conversations[`conv-${p}`].contact_name = newContact.name;
-        db.conversations[`conv-${p}`].updated_at = new Date().toISOString();
+      if (db.conversations && db.conversations[`conv-${targetPhone}`]) {
+        db.conversations[`conv-${targetPhone}`].contact_name = newContact.name;
+        db.conversations[`conv-${targetPhone}`].updated_at = new Date().toISOString();
       }
 
-      await syncContactToSupabase({ ...newContact, phone: p });
+      await syncContactToSupabase({ ...newContact, phone: targetPhone });
+    }
+
+    // Limpar quaisquer registros LID espúrios
+    for (const p of allPhones) {
+      if (p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) {
+        if (Array.isArray(db.contacts)) {
+          db.contacts = db.contacts.filter(c => String(c.phone || '').replace(/\D/g, '') !== p);
+        } else if (db.contacts) {
+          delete db.contacts[p];
+        }
+        if (db.conversations) delete db.conversations[`conv-${p}`];
+        if (supabaseServer) {
+          supabaseServer.from('clients').delete().eq('phone', p).catch(() => {});
+          supabaseServer.from('contacts').delete().eq('phone', p).catch(() => {});
+        }
+      }
     }
 
     saveDb(db);
@@ -1328,29 +1360,48 @@ app.put('/api/contacts/:id', async (req, res) => {
     const data = req.body || {};
     const cleanPhone = String(data.phone || id).replace(/\D/g, '');
 
-    const { allPhones } = resolveLinkedPhones(cleanPhone, db);
+    const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
+    const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
+    const isTargetLid = targetPhone.length >= 14 || targetPhone.startsWith('1686') || targetPhone.startsWith('219');
     let updatedContact = null;
 
     if (!db.contacts) db.contacts = {};
-    for (const p of allPhones) {
+
+    if (!isTargetLid) {
       if (Array.isArray(db.contacts)) {
-        const idx = db.contacts.findIndex(c => c.id === id || String(c.phone || '').replace(/\D/g, '') === p);
+        const idx = db.contacts.findIndex(c => c.id === id || String(c.phone || '').replace(/\D/g, '') === targetPhone);
         if (idx >= 0) {
-          db.contacts[idx] = { ...db.contacts[idx], ...data, phone: p, updated_at: new Date().toISOString() };
+          db.contacts[idx] = { ...db.contacts[idx], ...data, phone: targetPhone, updated_at: new Date().toISOString() };
           updatedContact = db.contacts[idx];
         }
-      } else if (db.contacts[p] || p === cleanPhone) {
-        db.contacts[p] = { ...(db.contacts[p] || {}), ...data, phone: p, updated_at: new Date().toISOString() };
-        updatedContact = db.contacts[p];
+      } else {
+        db.contacts[targetPhone] = { ...(db.contacts[targetPhone] || {}), ...data, phone: targetPhone, updated_at: new Date().toISOString() };
+        updatedContact = db.contacts[targetPhone];
       }
 
-      if (db.conversations && db.conversations[`conv-${p}`]) {
-        if (data.name) db.conversations[`conv-${p}`].contact_name = data.name;
-        db.conversations[`conv-${p}`].updated_at = new Date().toISOString();
+      if (db.conversations && db.conversations[`conv-${targetPhone}`]) {
+        if (data.name) db.conversations[`conv-${targetPhone}`].contact_name = data.name;
+        db.conversations[`conv-${targetPhone}`].updated_at = new Date().toISOString();
       }
 
       if (updatedContact) {
         await syncContactToSupabase(updatedContact);
+      }
+    }
+
+    // Limpar quaisquer registros LID espúrios
+    for (const p of allPhones) {
+      if (p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) {
+        if (Array.isArray(db.contacts)) {
+          db.contacts = db.contacts.filter(c => String(c.phone || '').replace(/\D/g, '') !== p);
+        } else if (db.contacts) {
+          delete db.contacts[p];
+        }
+        if (db.conversations) delete db.conversations[`conv-${p}`];
+        if (supabaseServer) {
+          supabaseServer.from('clients').delete().eq('phone', p).catch(() => {});
+          supabaseServer.from('contacts').delete().eq('phone', p).catch(() => {});
+        }
       }
     }
 

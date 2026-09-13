@@ -14,4 +14,5 @@ discloud/dist
 discloud/server
 *.log
 *.tmp
+scratch/
 
