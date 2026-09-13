@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pitoco de Gente — Roupas de Bebê, Infantil e Enxovais</title>
+    <meta name="description" content="Pitoco de Gente — Roupas de Bebê, Infantil e Enxovais. Bodies suedine 100%, macacões zíper duplo, saídas de maternidade em tricot luxo e atendimento centralizado." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Decodificador SPA para rotas no GitHub Pages -->
+    <script>
+      (function(l) {
+        if (l.search[1] === '/' ) {
+          var decoded = l.search.slice(1).split('&').map(function(s) { 
+            return s.replace(/~and~/g, '&');
+          }).join('?');
+          window.history.replaceState(null, null,
+              l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location))
+    </script>
+    <script type="module" crossorigin src="/assets/index.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index.css">
+  </head>
+  <body class="bg-dark-950 text-slate-100 antialiased selection:bg-pitoco-blue selection:text-slate-950 font-sans">
+    <div id="root"></div>
+    <script>
+      // Fallback para GitHub Pages e servidores estáticos sem bundler ativo
+      window.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+          var root = document.getElementById('root');
+          if (root && root.children.length === 0) {
+            console.warn('[Pitoco] Tela em branco evitada: carregando bundle compilado /assets/index.js...');
+            var script = document.createElement('script');
+            script.type = 'module';
+            script.src = '/assets/index.js';
+            document.body.appendChild(script);
+
+            if (!document.getElementById('bundle-css')) {
+              var link = document.createElement('link');
+              link.id = 'bundle-css';
+              link.rel = 'stylesheet';
+              link.href = '/assets/index.css';
+              document.head.appendChild(link);
+            }
+          }
+        }, 400);
+      });
+    </script>
+  </body>
+</html>

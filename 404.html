@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <title>Pitoco de Gente</title>
+    <script type="text/javascript">
+      // GitHub Pages SPA Redirect Encoder
+      // Preserva rotas amigáveis (/fluxos/id/flow-..., /atendimento/id/conv-..., /configuracoes/...)
+      var l = window.location;
+      var pathSegmentsToKeep = (l.hostname.includes('github.io') && l.pathname.startsWith('/7assistente')) ? 1 : 0;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
+    </script>
+  </head>
+  <body style="background:#09090b;color:#a1a1aa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;">
+    <div style="text-align:center;">
+      <p style="font-size:14px;letter-spacing:1px;">Carregando Pitoco de Gente...</p>
+    </div>
+  </body>
+</html>
