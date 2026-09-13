@@ -2785,9 +2785,11 @@ app.post('/api/db/supabase-sync', async (req, res) => {
 });
 
 
-// Single Page App fallback for non-API routes
+// SPA Fallback: Qualquer rota web (exceto /api, /health, /webhook) serve o index.html compilado
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) return next();
+  if (req.path.startsWith('/api') || req.path === '/health' || req.path.startsWith('/webhook')) {
+    return next();
+  }
   const indexPath = path.join(DIST_PATH, 'index.html');
   if (fs.existsSync(indexPath)) {
     return res.sendFile(indexPath);
@@ -2798,16 +2800,6 @@ app.get('*', (req, res, next) => {
     version: '2.0.0',
     whatsapp: connectionStatus,
   });
-// SPA Fallback: Qualquer rota web (exceto /api, /health, /webhook) serve o index.html compilado
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api') || req.path === '/health' || req.path.startsWith('/webhook')) {
-    return next();
-  }
-  const indexPath = path.join(DIST_PATH, 'index.html');
-  if (fs.existsSync(indexPath)) {
-    return res.sendFile(indexPath);
-  }
-  next();
 });
 
 app.listen(PORT, HOST, async () => {
