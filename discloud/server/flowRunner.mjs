@@ -1676,7 +1676,14 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
 
   // Obter sessão atual para preservar fluxo em andamento se estiver aguardando resposta
   const existingSession = db.sessions?.[cleanPhone] || db.sessions?.[rawId];
-  const isSessionWaitingInput = Boolean(
+  const isExistingSessionExpired = Boolean(
+    existingSession?.lastInteractionAt && (Date.now() - existingSession.lastInteractionAt) > (15 * 60 * 1000)
+  );
+  const isCleanGreetingEarly = [
+    'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hello', 'menu', 'inicio', 'início'
+  ].includes(cleanInput.toLowerCase().trim());
+
+  const isSessionWaitingInput = !isExistingSessionExpired && !isCleanGreetingEarly && Boolean(
     existingSession?.waitingForVar ||
     (existingSession?.activeButtons && existingSession.activeButtons.length > 0)
   );
@@ -1840,7 +1847,12 @@ function parseCustomDateString(input) {
     'promotional_coupon',
   ];
 
-  const isWaitingForInput = Boolean(
+  // Inatividade de sessão (> 15 min de inatividade expira o estado intermediário e reinicia o atendimento)
+  const isSessionExpired = Boolean(
+    session.lastInteractionAt && (Date.now() - session.lastInteractionAt) > (15 * 60 * 1000)
+  );
+
+  const isWaitingForInput = !isSessionExpired && !isGreeting && !isExplicitReset && Boolean(
     session.waitingForVar ||
     (session.activeButtons && session.activeButtons.length > 0) ||
     (prevNode && interactiveTypes.includes(prevType))
@@ -1882,13 +1894,15 @@ function parseCustomDateString(input) {
   // qualquer nova mensagem do cliente executa o fluxo a partir do gatilho!
   const isTerminalNode = Boolean(prevNode && !hasOutgoingEdges && !isWaitingForInput);
 
-  const isReset = isKeywordMatch || isExplicitReset || isTerminalNode || !session.currentNodeId || !isWaitingForInput;
+  const isReset = isKeywordMatch || isExplicitReset || isGreeting || isSessionExpired || isTerminalNode || !session.currentNodeId || !isWaitingForInput;
 
   let currentNode = null;
 
   if (isReset) {
     currentNode = nodes.find((n) => (n.data?.nodeType || n.type) === 'trigger') || nodes[0];
     session.currentNodeId = currentNode.id;
+    session.waitingForVar = null;
+    session.activeButtons = null;
   } else {
     const prevNode = nodes.find((n) => n.id === session.currentNodeId);
     const prevType = prevNode?.data?.nodeType || prevNode?.type;

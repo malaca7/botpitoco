@@ -506,11 +506,11 @@ async function sendBotReply(destinationJid, reply, quotedMsg = null, skipRecord 
       }
 
       // 🛡️ ANTI-BAN: Simular digitação humana
-      await simulateHumanPresence(remoteJid, formatted.length);
+      await simulateHumanPresence(targetJid, formatted.length);
 
       const ok = await trySendMessage({ text: formatted });
       if (ok) {
-        console.log(`✅ [WhatsApp Enviado] Menu (${buttons.length} opções) para ${remoteJid}`);
+        console.log(`✅ [WhatsApp Enviado] Menu (${buttons.length} opções) para ${targetJid}`);
         if (!skipRecord) {
           await recordMessageLocallyAndSupabase(cleanPhone, 'Pitoco Bot', 'outbound', formatted);
         }
@@ -536,11 +536,11 @@ async function sendBotReply(destinationJid, reply, quotedMsg = null, skipRecord 
       }
 
       // 🛡️ ANTI-BAN: Simular presença antes de envio de mídia
-      await simulateHumanPresence(remoteJid, 20);
+      await simulateHumanPresence(targetJid, 20);
 
       const ok = await trySendMessage(payload);
       if (ok) {
-        console.log(`✅ [WhatsApp Enviado] Mídia (${mediaType}) para ${remoteJid}`);
+        console.log(`✅ [WhatsApp Enviado] Mídia (${mediaType}) para ${targetJid}`);
         if (!skipRecord) {
           await recordMessageLocallyAndSupabase(cleanPhone, 'Pitoco Bot', 'outbound', caption || `[Arquivo ${mediaType}]`);
         }
@@ -550,7 +550,7 @@ async function sendBotReply(destinationJid, reply, quotedMsg = null, skipRecord 
 
     return false;
   } catch (err) {
-    console.error(`❌ [SendReply] Erro geral ao enviar resposta para ${remoteJid}:`, err);
+    console.error(`❌ [SendReply] Erro geral ao enviar resposta para ${targetJid}:`, err);
     return false;
   }
 }
