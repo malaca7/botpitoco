@@ -264,8 +264,8 @@
         "flow_id": "flow-1788033465058",
         "type": "trigger",
         "position": {
-          "x": 315,
-          "y": 100
+          "x": 320,
+          "y": 80
         },
         "data": {
           "label": "Gatilho",
@@ -284,8 +284,8 @@
         "flow_id": "flow-1788033465058",
         "type": "check_contact",
         "position": {
-          "x": 315,
-          "y": 300
+          "x": 320,
+          "y": 370
         },
         "data": {
           "label": "Verificar Contato (Novo vs Salvo)",
@@ -300,8 +300,8 @@
         "flow_id": "flow-1788033465058",
         "type": "message",
         "position": {
-          "x": 100,
-          "y": 540
+          "x": 560,
+          "y": 730
         },
         "data": {
           "label": "Enviar Mensagem",
@@ -319,8 +319,8 @@
         "flow_id": "flow-1788033465058",
         "type": "question",
         "position": {
-          "x": 100,
-          "y": 790
+          "x": 560,
+          "y": 1090
         },
         "data": {
           "label": "Pergunta & Resposta",
@@ -339,8 +339,8 @@
         "flow_id": "flow-1788033465058",
         "type": "update_contact",
         "position": {
-          "x": 100,
-          "y": 1020
+          "x": 560,
+          "y": 1450
         },
         "data": {
           "label": "Salvar / Vincular Dados",
@@ -360,8 +360,8 @@
         "flow_id": "flow-1788033465058",
         "type": "message",
         "position": {
-          "x": 530,
-          "y": 540
+          "x": 80,
+          "y": 1480
         },
         "data": {
           "label": "Enviar Mensagem",
@@ -379,8 +379,8 @@
         "flow_id": "flow-1788033465058",
         "type": "ask_date",
         "position": {
-          "x": 315,
-          "y": 1250
+          "x": 320,
+          "y": 1870
         },
         "data": {
           "label": "1. Escolher Dia do Agendamento",
@@ -399,8 +399,8 @@
         "flow_id": "flow-1788033465058",
         "type": "services_catalog",
         "position": {
-          "x": 315,
-          "y": 1490
+          "x": 320,
+          "y": 2210
         },
         "data": {
           "label": "2. Catálogo de Serviços & Preços",
@@ -422,8 +422,8 @@
         "flow_id": "flow-1788033465058",
         "type": "schedule_contact",
         "position": {
-          "x": 315,
-          "y": 1740
+          "x": 320,
+          "y": 2550
         },
         "data": {
           "label": "3. Horários Livres da Agenda",
@@ -444,8 +444,8 @@
         "flow_id": "flow-1788033465058",
         "type": "confirm_booking",
         "position": {
-          "x": 315,
-          "y": 1990
+          "x": 320,
+          "y": 2890
         },
         "data": {
           "label": "4. Confirmar & Gravar Agendamento",
@@ -464,8 +464,8 @@
         "flow_id": "flow-1788452126641",
         "type": "trigger",
         "position": {
-          "x": 315,
-          "y": 100
+          "x": 425,
+          "y": 80
         },
         "data": {
           "label": "Gatilho Inicial",
@@ -484,8 +484,8 @@
         "flow_id": "flow-1788452126641",
         "type": "message",
         "position": {
-          "x": 315,
-          "y": 1230
+          "x": 425,
+          "y": 1850
         },
         "data": {
           "label": "Enviar Mensagem",
@@ -503,8 +503,8 @@
         "flow_id": "flow-1788452126641",
         "type": "check_contact",
         "position": {
-          "x": 315,
-          "y": 300
+          "x": 425,
+          "y": 370
         },
         "data": {
           "label": "Verificar Contato (Novo vs Salvo)",
@@ -519,8 +519,8 @@
         "flow_id": "flow-1788452126641",
         "type": "message",
         "position": {
-          "x": 315,
-          "y": 1670
+          "x": 425,
+          "y": 2570
         },
         "data": {
           "label": "Enviar Mensagem (Cópia)",
@@ -538,8 +538,8 @@
         "flow_id": "flow-1788452126641",
         "type": "message",
         "position": {
-          "x": 315,
-          "y": 1890
+          "x": 425,
+          "y": 2930
         },
         "data": {
           "label": "Enviar Mensagem (Cópia) (Cópia)",
@@ -557,8 +557,8 @@
         "flow_id": "flow-1788452126641",
         "type": "message",
         "position": {
-          "x": 315,
-          "y": 1450
+          "x": 425,
+          "y": 2210
         },
         "data": {
           "label": "Enviar Mensagem (Cópia)",
@@ -576,8 +576,8 @@
         "flow_id": "flow-1788452126641",
         "type": "question",
         "position": {
-          "x": 100,
-          "y": 540
+          "x": 80,
+          "y": 730
         },
         "data": {
           "label": "Pergunta & Resposta",
@@ -596,8 +596,8 @@
         "flow_id": "flow-1788452126641",
         "type": "update_contact",
         "position": {
-          "x": 100,
-          "y": 770
+          "x": 80,
+          "y": 1090
         },
         "data": {
           "label": "Salvar / Vincular Dados",
@@ -618,8 +618,8 @@
         "flow_id": "flow-1788452126641",
         "type": "variable",
         "position": {
-          "x": 100,
-          "y": 1000
+          "x": 80,
+          "y": 1510
         },
         "data": {
           "label": "Definir Variável",
@@ -648,8 +648,8 @@
         "flow_id": "flow-1788452126641",
         "type": "buttons",
         "position": {
-          "x": 315,
-          "y": 2110
+          "x": 425,
+          "y": 3290
         },
         "data": {
           "label": "Botões Interativos WhatsApp",
@@ -681,8 +681,8 @@
         "flow_id": "flow-1788452126641",
         "type": "show_services",
         "position": {
-          "x": 745,
-          "y": 2426
+          "x": 550,
+          "y": 3710
         },
         "data": {
           "label": "1. Exibir Catálogo de Serviços",
@@ -700,8 +700,8 @@
         "flow_id": "flow-1788452126641",
         "type": "delay",
         "position": {
-          "x": 745,
-          "y": 2676
+          "x": 425,
+          "y": 4050
         },
         "data": {
           "label": "Aguardar / Espera",
@@ -721,8 +721,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "message",
         "position": {
-          "x": 580,
-          "y": 1440
+          "x": 425,
+          "y": 1510
         },
         "data": {
           "label": "Enviar Mensagem",
@@ -740,8 +740,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "human_handoff",
         "position": {
-          "x": 820,
-          "y": 3415
+          "x": 425,
+          "y": 3370
         },
         "data": {
           "label": "Transferir para Humano",
@@ -759,8 +759,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "question",
         "position": {
-          "x": 100,
-          "y": 750
+          "x": 80,
+          "y": 730
         },
         "data": {
           "label": "Pergunta & Resposta",
@@ -779,8 +779,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "update_contact",
         "position": {
-          "x": 100,
-          "y": 1060
+          "x": 80,
+          "y": 1090
         },
         "data": {
           "label": "Salvar / Vincular Dados",
@@ -803,8 +803,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "check_contact",
         "position": {
-          "x": 580,
-          "y": 355
+          "x": 425,
+          "y": 370
         },
         "data": {
           "label": "Verificar Contato (Novo vs Salvo)",
@@ -819,8 +819,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "trigger",
         "position": {
-          "x": 580,
-          "y": 100
+          "x": 425,
+          "y": 80
         },
         "data": {
           "label": "Gatilho Inicial",
@@ -839,8 +839,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "measure_guide",
         "position": {
-          "x": 820,
-          "y": 2930
+          "x": 905,
+          "y": 3010
         },
         "data": {
           "label": "Guia de Medidas (RN a 3 Anos)",
@@ -858,8 +858,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "message",
         "position": {
-          "x": 580,
-          "y": 1755
+          "x": 425,
+          "y": 1870
         },
         "data": {
           "label": "Enviar Mensagem",
@@ -877,8 +877,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "show_catalog",
         "position": {
-          "x": 340,
-          "y": 2930
+          "x": 80,
+          "y": 3010
         },
         "data": {
           "label": "Vitrine da Loja Virtual",
@@ -898,8 +898,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "store_selector",
         "position": {
-          "x": 580,
-          "y": 2070
+          "x": 425,
+          "y": 2230
         },
         "data": {
           "label": "Escolha de Loja / Filial",
@@ -917,8 +917,8 @@
         "flow_id": "flow-pitoco-001",
         "type": "buttons",
         "position": {
-          "x": 580,
-          "y": 2525
+          "x": 665,
+          "y": 2590
         },
         "data": {
           "label": "Botões Interativos WhatsApp",
@@ -1226,7 +1226,7 @@
   "contacts": {
     "558196138924": {
       "id": "contact-558196138924",
-      "name": "Malaquias",
+      "name": "João",
       "phone": "558196138924",
       "status": "active",
       "is_registered": true,
@@ -1241,7 +1241,7 @@
         "nome_cliente": "Malaquias"
       },
       "created_at": "2026-09-12T20:55:11.970Z",
-      "updated_at": "2026-09-13T03:06:39.308Z",
+      "updated_at": "2026-09-13T05:39:03.428Z",
       "last_interaction": "2026-09-12T20:55:11.970Z",
       "whatsapp_pushname": "Malaquias"
     }
@@ -1249,7 +1249,7 @@
   "conversations": {
     "conv-558196138924": {
       "id": "conv-558196138924",
-      "contact_name": "Malaquias",
+      "contact_name": "João",
       "contact_phone": "558196138924",
       "phone": "558196138924",
       "last_message": "🏬 *Escolha de Filial / Loja:*\n\n🏬 *PITOCO DE GENTE — Escolha sua Loja de Preferência:*\n\nQual de nossas lojas você deseja falar hoje?\n\n• *Loja Matriz — Centro* (Cabo - PE)\n• *Loja Ipojuca - Filial* (Ipojuca - PE)",
@@ -1257,7 +1257,7 @@
       "status": "bot",
       "store_name": "Pitoco de Gente",
       "contact_id": "contact-558196138924",
-      "updated_at": "2026-09-13T03:06:39.308Z",
+      "updated_at": "2026-09-13T05:39:03.428Z",
       "started_at": "2026-09-12T23:43:39.112Z",
       "unread_count": 0,
       "created_at": "2026-09-12T23:43:39.112Z"

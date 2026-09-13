@@ -159,7 +159,7 @@ export async function syncContactToSupabase(contact) {
 
     const formattedName = formatCustomerName(contact.name) || contact.name || 'Cliente WhatsApp';
 
-    // 1. Tabela contacts
+    // 1. Tabela contacts (sem coluna last_interaction)
     const payload = {
       id: contact.id || `contact-${cleanPhone}`,
       name: formattedName,
@@ -167,13 +167,25 @@ export async function syncContactToSupabase(contact) {
       status: contact.status || 'active',
       profile_picture_url: contact.profile_picture_url || null,
       tags: contact.tags || ['Cliente WhatsApp'],
-      metadata: contact.custom_fields || contact.metadata || {},
-      last_interaction: new Date().toISOString(),
+      metadata: {
+        ...(contact.custom_fields || contact.metadata || {}),
+        ...(contact.baby_name ? { baby_name: contact.baby_name } : {}),
+        ...(contact.due_date ? { due_date: contact.due_date } : {}),
+        ...(contact.email ? { email: contact.email } : {}),
+        ...(contact.notes ? { notes: contact.notes } : {}),
+      },
       updated_at: new Date().toISOString(),
     };
-    await supabaseClient.from('contacts').upsert(payload, { onConflict: 'phone' });
+    try {
+      const { error: contactsErr } = await supabaseClient.from('contacts').upsert(payload, { onConflict: 'phone' });
+      if (contactsErr) {
+        console.warn(`[Supabase contacts] Aviso ao upsert contato ${cleanPhone}:`, contactsErr.message);
+      }
+    } catch (errContacts) {
+      console.warn(`[Supabase contacts] Erro de rede/conexao:`, errContacts.message);
+    }
 
-    // 2. Tabela clients (Tabela mestre do CRM - sem coluna status)
+    // 2. Tabela clients (Tabela mestre do CRM - possui last_interaction)
     const clientPayload = {
       id: contact.id || `client-${cleanPhone}`,
       name: formattedName,
@@ -188,7 +200,16 @@ export async function syncContactToSupabase(contact) {
       last_interaction: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    await supabaseClient.from('clients').upsert(clientPayload, { onConflict: 'phone' });
+    try {
+      const { error: clientsErr } = await supabaseClient.from('clients').upsert(clientPayload, { onConflict: 'phone' });
+      if (clientsErr) {
+        console.warn(`[Supabase clients] Aviso ao upsert cliente ${cleanPhone}:`, clientsErr.message);
+      } else {
+        console.log(`[Supabase CRM] Sincronizado com sucesso: "${formattedName}" (${cleanPhone}) | Tags: [${(contact.tags || []).join(', ')}]`);
+      }
+    } catch (errClients) {
+      console.warn(`[Supabase clients] Erro de rede/conexao:`, errClients.message);
+    }
   } catch (err) {
     // Non-blocking
   }
@@ -294,11 +315,23 @@ function migrateLidContacts(db) {
       }
 
       if (realPhone && realPhone.length >= 8) {
-        const oldContact = db.contacts[key];
+        const oldContact = db.contacts[key] || {};
+        const existingReal = db.contacts[realPhone] || {};
+        const resolvedName = (existingReal.is_registered || (existingReal.name && existingReal.name !== 'Cliente WhatsApp' && existingReal.name !== oldContact.name))
+          ? existingReal.name
+          : (oldContact.name || existingReal.name || 'Cliente WhatsApp');
+        const resolvedTags = (existingReal.is_registered && existingReal.tags)
+          ? existingReal.tags
+          : (oldContact.tags || existingReal.tags || ['Cliente WhatsApp']);
+
         db.contacts[realPhone] = {
           ...oldContact,
+          ...existingReal,
           id: `contact-${realPhone}`,
           phone: realPhone,
+          name: resolvedName,
+          tags: resolvedTags,
+          is_registered: existingReal.is_registered || oldContact.is_registered || false,
           updated_at: new Date().toISOString(),
         };
         delete db.contacts[key];
@@ -1013,6 +1046,17 @@ export function recordRealMessage(phone, senderName, direction, content, explici
   }
   if (explicitTags && Array.isArray(explicitTags)) {
     existingContact.tags = explicitTags;
+  }
+
+  // Contatos já registrados mantêm status active e removem a tag "Lead"
+  if (existingContact.is_registered) {
+    existingContact.status = 'active';
+    if (Array.isArray(existingContact.tags)) {
+      existingContact.tags = existingContact.tags.filter(t => t.toLowerCase() !== 'lead');
+      if (existingContact.tags.length === 0) {
+        existingContact.tags = ['Cliente WhatsApp', 'Bot'];
+      }
+    }
   }
 
   existingContact.updated_at = now;

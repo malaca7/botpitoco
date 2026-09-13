@@ -622,15 +622,14 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
       }
     };
 
-    const NODE_WIDTH = 330;
-    const HORIZONTAL_GAP = 130;
-    const VERTICAL_GAP = 120;
+    const NODE_WIDTH = 340;
+    const HORIZONTAL_GAP = 140;
+    const VERTICAL_GAP = 140;
 
     // 2. Inicializar Grafo Dagre para Layout Top-to-Bottom (TB)
     const g = new dagre.graphlib.Graph({ multigraph: true });
     g.setGraph({
       rankdir: 'TB',
-      align: 'UL',
       nodesep: HORIZONTAL_GAP,
       ranksep: VERTICAL_GAP,
       marginx: 80,
@@ -646,9 +645,9 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
     // Prioridade de handles para organização natural da esquerda para a direita
     const getHandlePriority = (handle: string): number => {
       const h = (handle || '').toLowerCase();
-      if (h === 'is_new' || h.includes('novo') || h === 'true' || h === 'shipping_motoboy' || h === 'pix_paid' || h === 'consult_online' || h === 'coupon_valid' || h === 'btn_1') return 1;
-      if (h === 'shipping_correios' || h === 'btn_2') return 2;
-      if (h === 'is_existing' || h.includes('exist') || h === 'false' || h === 'shipping_pickup' || h === 'pix_help' || h === 'consult_store' || h === 'coupon_invalid' || h === 'btn_3') return 3;
+      if (h === 'is_new' || h.includes('novo') || h === 'true' || h === 'sim' || h === 'shipping_motoboy' || h === 'pix_paid' || h === 'consult_online' || h === 'coupon_valid' || h === 'btn_1' || h.includes('store-001')) return 1;
+      if (h === 'shipping_correios' || h === 'btn_2' || h.includes('store-002') || h === 'false' || h === 'nao' || h === 'is_existing') return 2;
+      if (h.includes('exist') || h === 'shipping_pickup' || h === 'pix_help' || h === 'consult_store' || h === 'coupon_invalid' || h === 'btn_3' || h.includes('store-003')) return 3;
       if (h.startsWith('btn_')) {
         const n = parseInt(h.replace('btn_', ''), 10);
         return Number.isFinite(n) ? n : 5;
@@ -677,97 +676,122 @@ export const FlowEditorPageContent: React.FC<FlowEditorPageProps> = ({ flowId, o
       console.warn('Aviso no Dagre layout:', layoutErr);
     }
 
-    // 4. Agrupar por rank (linha/camada) e nivelar o topo de cada linha com precisão
-    const byRank = new Map<number, Array<{ id: string; node: Node; h: number; x: number; y: number }>>();
-
+    const nodeMap = new Map<string, { id: string; node: Node; w: number; h: number; x: number; y: number; rank: number }>();
     currentNodes.forEach((n) => {
       const gn = g.node(n.id);
       const h = getNodeHeight(n);
-      const rawX = gn ? Math.round(gn.x - NODE_WIDTH / 2) : 80;
-      const rawY = gn ? Math.round(gn.y - h / 2) : 80;
-      const rank = gn?.rank ?? 0;
-
-      if (!byRank.has(rank)) byRank.set(rank, []);
-      byRank.get(rank)!.push({ id: n.id, node: n, h, x: rawX, y: rawY });
+      nodeMap.set(n.id, {
+        id: n.id,
+        node: n,
+        w: NODE_WIDTH,
+        h,
+        x: gn ? Math.round(gn.x - NODE_WIDTH / 2) : 80,
+        y: gn ? Math.round(gn.y - h / 2) : 80,
+        rank: gn?.rank ?? 0,
+      });
     });
 
-    const ranks = Array.from(byRank.keys()).sort((a, b) => a - b);
-    let currentY = 80;
+    // 4. Alinhamento de Leque (Fan-out) para saídas múltiplas em alvos no mesmo rank
+    currentNodes.forEach((n) => {
+      const outEdges = (currentEdges || []).filter((e) => e.source === n.id && validNodeIds.has(e.target));
+      if (outEdges.length > 1) {
+        outEdges.sort((a, b) => getHandlePriority(a.sourceHandle || '') - getHandlePriority(b.sourceHandle || ''));
+        const targets = outEdges.map((e) => nodeMap.get(e.target)).filter(Boolean) as Array<{ id: string; node: Node; w: number; h: number; x: number; y: number; rank: number }>;
+        const byRank = new Map<number, typeof targets>();
+        targets.forEach((t) => {
+          if (!byRank.has(t.rank)) byRank.set(t.rank, []);
+          byRank.get(t.rank)!.push(t);
+        });
 
-    const edgeSourceHandleMap = new Map<string, string>();
-    (currentEdges || []).forEach((e) => {
-      edgeSourceHandleMap.set(`${e.source}->${e.target}`, e.sourceHandle || '');
+        byRank.forEach((rankTargets) => {
+          if (rankTargets.length > 1) {
+            const srcItem = nodeMap.get(n.id);
+            if (srcItem) {
+              const totalW = rankTargets.length * NODE_WIDTH + (rankTargets.length - 1) * HORIZONTAL_GAP;
+              const startX = srcItem.x + srcItem.w / 2 - totalW / 2;
+              rankTargets.forEach((tgt, idx) => {
+                tgt.x = Math.round(startX + idx * (NODE_WIDTH + HORIZONTAL_GAP));
+              });
+            }
+          }
+        });
+      }
     });
 
-    ranks.forEach((r) => {
-      const rankItems = byRank.get(r)!;
+    // 5. Multi-passagem para garantir que linhas nunca atravessem cards e cards nunca se sobreponham
+    for (let pass = 0; pass < 8; pass++) {
+      let shifted = false;
 
-      // Ordenar nós horizontalmente
-      rankItems.sort((a, b) => a.x - b.x);
+      // Desobstruir corredores verticais de conexão entre nós
+      (currentEdges || []).forEach((e) => {
+        const src = nodeMap.get(e.source);
+        const tgt = nodeMap.get(e.target);
+        if (!src || !tgt) return;
 
-      // Checar irmãos com o mesmo nó pai para garantir que o da esquerda fique à esquerda
-      for (let i = 0; i < rankItems.length; i++) {
-        for (let j = i + 1; j < rankItems.length; j++) {
-          const itemA = rankItems[i];
-          const itemB = rankItems[j];
+        const topY = src.y + src.h;
+        const bottomY = tgt.y;
+        if (bottomY <= topY + 20) return;
 
-          const parentsA = (currentEdges || []).filter((e) => e.target === itemA.id).map((e) => e.source);
-          const sharedParents = parentsA.filter((p) => (currentEdges || []).some((e) => e.source === p && e.target === itemB.id));
+        const lineX1 = src.x + src.w / 2;
+        const lineX2 = tgt.x + tgt.w / 2;
+        const corridorMinX = Math.min(lineX1, lineX2) - 35;
+        const corridorMaxX = Math.max(lineX1, lineX2) + 35;
 
-          if (sharedParents.length > 0) {
-            const p = sharedParents[0];
-            const handleA = edgeSourceHandleMap.get(`${p}->${itemA.id}`) || '';
-            const handleB = edgeSourceHandleMap.get(`${p}->${itemB.id}`) || '';
-            const prioA = getHandlePriority(handleA);
-            const prioB = getHandlePriority(handleB);
+        nodeMap.forEach((it) => {
+          if (it.id === e.source || it.id === e.target) return;
+          if (it.y + it.h > topY + 10 && it.y < bottomY - 10) {
+            if (it.x + it.w > corridorMinX && it.x < corridorMaxX) {
+              const shiftLeft = (it.x + it.w / 2) <= ((lineX1 + lineX2) / 2);
+              if (shiftLeft) {
+                it.x = corridorMinX - it.w - HORIZONTAL_GAP;
+              } else {
+                it.x = corridorMaxX + HORIZONTAL_GAP;
+              }
+              shifted = true;
+            }
+          }
+        });
+      });
 
-            if (prioA > prioB && itemA.x < itemB.x) {
-              const tmpX = itemA.x;
-              itemA.x = itemB.x;
-              itemB.x = tmpX;
+      // Evitar sobreposição física entre quaisquer dois cards (2D Bounding Box Collision)
+      const allItems = Array.from(nodeMap.values());
+      for (let i = 0; i < allItems.length; i++) {
+        for (let j = 0; j < allItems.length; j++) {
+          if (i === j) continue;
+          const a = allItems[i];
+          const b = allItems[j];
+          const yOverlap = a.y < b.y + b.h + 20 && b.y < a.y + a.h + 20;
+          if (yOverlap) {
+            if (a.x < b.x + b.w + HORIZONTAL_GAP && b.x < a.x + a.w + HORIZONTAL_GAP) {
+              if (b.x >= a.x) {
+                b.x = a.x + a.w + HORIZONTAL_GAP;
+              } else {
+                a.x = b.x + b.w + HORIZONTAL_GAP;
+              }
+              shifted = true;
             }
           }
         }
       }
 
-      // Re-ordenar após eventuais ajustes de irmãos e garantir espaçamento horizontal mínimo
-      rankItems.sort((a, b) => a.x - b.x);
-      for (let i = 1; i < rankItems.length; i++) {
-        const minX = rankItems[i - 1].x + NODE_WIDTH + HORIZONTAL_GAP;
-        if (rankItems[i].x < minX) {
-          rankItems[i].x = minX;
-        }
-      }
+      if (!shifted) break;
+    }
 
-      // Nivelar todos os nós desta linha na mesma linha horizontal superior (Y)
-      rankItems.forEach((item) => {
-        item.y = currentY;
-      });
-
-      const maxHInRank = Math.max(...rankItems.map((item) => item.h), 140);
-      currentY += maxHInRank + VERTICAL_GAP;
-    });
-
-    // 5. Normalização global e enquadramento limpo (margem de 80px)
-    const allItems = Array.from(byRank.values()).flat();
-    const minX = allItems.length > 0 ? Math.min(...allItems.map((it) => it.x)) : 80;
-    const minY = allItems.length > 0 ? Math.min(...allItems.map((it) => it.y)) : 80;
+    // 6. Normalização com margem limpa de 80px no canvas
+    const finalItems = Array.from(nodeMap.values());
+    const minX = finalItems.length > 0 ? Math.min(...finalItems.map((it) => it.x)) : 80;
+    const minY = finalItems.length > 0 ? Math.min(...finalItems.map((it) => it.y)) : 80;
     const shiftX = 80 - minX;
     const shiftY = 80 - minY;
 
-    const positionedMap = new Map<string, { x: number; y: number }>();
-    allItems.forEach((it) => {
-      positionedMap.set(it.id, {
-        x: Math.round(it.x + shiftX),
-        y: Math.round(it.y + shiftY),
-      });
-    });
-
     return currentNodes.map((n) => {
-      const pos = positionedMap.get(n.id) || n.position;
+      const item = nodeMap.get(n.id);
       return {
         ...n,
-        position: pos,
+        position: {
+          x: Math.round((item ? item.x : n.position.x) + shiftX),
+          y: Math.round((item ? item.y : n.position.y) + shiftY),
+        },
       };
     });
   }, []);
