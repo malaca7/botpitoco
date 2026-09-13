@@ -1691,33 +1691,37 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
 
   // 🛡️ BLINDAGEM INTELIGENTE DE ATENDIMENTO HUMANO:
   // Se o cliente digitou uma palavra-chave registrada OU um comando de reinício/saudação, o robô assume imediatamente!
-  const isBotResetCmd = ['#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio', '/bot', '/sair', '/menu', 'reiniciar', 'oi', 'olá', 'ola', 'começar', 'comecar', 'voltar', 'bom dia', 'boa tarde', 'boa noite', 'start'].includes(cleanInput.toLowerCase());
+  const cleanLower = cleanInput.toLowerCase().trim();
+  const cleanTextOnly = cleanLower.replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+  const isBotResetCmd = [
+    '#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio',
+    '/bot', '/sair', '/menu', 'reiniciar', 'menu', 'inicio', 'início', 'começar', 'comecar',
+    'voltar', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'start', 'bot'
+  ].some(cmd => cleanLower === cmd || cleanTextOnly === cmd || cleanTextOnly.startsWith(`${cmd} `));
 
-  if ((isKeywordMatch || isBotResetCmd) && currentConv) {
-    if (currentConv.status === 'human') {
-      console.log(`🤖 [FlowRunner] Palavra-chave ou comando "${cleanInput}" recebido. Devolvendo conversa ${cleanPhone} ao robô.`);
-    }
-    currentConv.status = 'bot';
-    currentConv.assigned_to = null;
-    currentConv.assigned_attendant_name = null;
-    currentConv.assigned_attendant_id = null;
-    if (db.sessions?.[cleanPhone]) delete db.sessions[cleanPhone];
-    saveDb(db);
-  } else if (currentConv && currentConv.status === 'human') {
-    // Verificar se o atendimento humano expirou por inatividade (>15 minutos)
-    const lastMsgTime = new Date(currentConv.last_message_at || currentConv.updated_at || 0).getTime();
-    const isHumanExpired = (Date.now() - lastMsgTime) > (15 * 60 * 1000);
-    if (isHumanExpired) {
-      console.log(`⏱️ [FlowRunner] Atendimento humano inativo (>15min) para ${cleanPhone}. Robô reassumindo fluxo.`);
+  if (currentConv) {
+    if (currentConv.status === 'closed') {
       currentConv.status = 'bot';
-      currentConv.assigned_to = null;
-      currentConv.assigned_attendant_name = null;
-      currentConv.assigned_attendant_id = null;
-      if (db.sessions?.[cleanPhone]) delete db.sessions[cleanPhone];
       saveDb(db);
-    } else {
-      console.log(`🛡️ [FlowRunner] Conversa ${cleanPhone} está em Atendimento Humano ("${currentConv.assigned_to || currentConv.assigned_attendant_name || 'Atendente'}"). O fluxo do robô não responderá.`);
-      return [];
+    }
+
+    if (currentConv.status === 'human') {
+      const isUnassigned = !currentConv.assigned_to || currentConv.assigned_to === 'undefined' || currentConv.assigned_to === null;
+      const lastAttendantTime = new Date(currentConv.last_attendant_message_at || currentConv.updated_at || 0).getTime();
+      const isHumanExpired = (Date.now() - lastAttendantTime) > (15 * 60 * 1000);
+
+      if (isKeywordMatch || isBotResetCmd || isUnassigned || isHumanExpired) {
+        console.log(`🤖 [FlowRunner] ${isBotResetCmd ? `Comando/saudação "${cleanInput}"` : (isUnassigned ? 'Sem atendente atribuído' : 'Inatividade (>15min)')} detectado. Reassumindo atendimento com o robô para ${cleanPhone}.`);
+        currentConv.status = 'bot';
+        currentConv.assigned_to = null;
+        currentConv.assigned_attendant_name = null;
+        currentConv.assigned_attendant_id = null;
+        if (db.sessions?.[cleanPhone]) delete db.sessions[cleanPhone];
+        saveDb(db);
+      } else {
+        console.log(`🛡️ [FlowRunner] Conversa ${cleanPhone} está em Atendimento Humano com "${currentConv.assigned_to}". Robô em pausa para não interferir.`);
+        return [];
+      }
     }
   }
 
@@ -1851,7 +1855,7 @@ function parseCustomDateString(input) {
   const shouldBypassCooldown = isKeywordMatch || isExplicitReset || isWaitingForInput || isGreeting || isTerminalPrevious || !session.currentNodeId;
 
   if (!shouldBypassCooldown) {
-    const cooldownMinutes = Number(botProfile.flow_cooldown_minutes ?? db.settings?.flow_cooldown_minutes ?? 60);
+    const cooldownMinutes = Number(botProfile.flow_cooldown_minutes ?? db.settings?.flow_cooldown_minutes ?? 0);
     const cooldownMs = cooldownMinutes * 60 * 1000;
     const lastTrigger = session.lastFlowTriggerAt || 0;
     const timeSinceLast = Date.now() - lastTrigger;
@@ -1874,10 +1878,11 @@ function parseCustomDateString(input) {
   session.lastInteractionAt = Date.now();
 
   // Se o nó anterior era terminal (sem saídas) e não está aguardando input do usuário,
-  // qualquer nova mensagem do cliente reinicia o fluxo a partir do gatilho!
+  // ou se o cliente não está no meio de uma resposta de pergunta/botão,
+  // qualquer nova mensagem do cliente executa o fluxo a partir do gatilho!
   const isTerminalNode = Boolean(prevNode && !hasOutgoingEdges && !isWaitingForInput);
 
-  const isReset = isKeywordMatch || isExplicitReset || isTerminalNode || (!isWaitingForInput && (isGreeting || !session.currentNodeId));
+  const isReset = isKeywordMatch || isExplicitReset || isTerminalNode || !session.currentNodeId || !isWaitingForInput;
 
   let currentNode = null;
 

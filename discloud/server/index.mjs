@@ -226,19 +226,65 @@ async function startWhatsApp() {
     });
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      if (type !== 'notify') return;
-      for (const msg of messages) {
-        if (!msg.message || msg.key.fromMe) continue;
+      // Aceita mensagens recebidas tanto como 'notify' quanto como 'append'
+      for (const msg of (messages || [])) {
+        if (!msg.message) continue;
         const remoteJid = msg.key.remoteJid || '';
-        if (remoteJid.includes('@g.us')) continue;
+        if (remoteJid.includes('@g.us') || remoteJid === 'status@broadcast') continue;
 
-        const clientPhone = remoteJid.replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
+        // Auto-teste: se o próprio número do bot enviar mensagem para si mesmo (Note to Self), permitir rodar fluxo
+        const isSelf = Boolean(msg.key.fromMe && (remoteJid.includes(connectedPhone) || !remoteJid.endsWith('@s.whatsapp.net')));
+        if (msg.key.fromMe && !isSelf) continue;
+
+        // Desempacotar mensagens com wrappers do WhatsApp (ephemeral, viewOnce, etc.)
+        let m = msg.message;
+        while (m?.ephemeralMessage?.message || m?.viewOnceMessage?.message || m?.viewOnceMessageV2?.message || m?.documentWithCaptionMessage?.message) {
+          m = m.ephemeralMessage?.message || m.viewOnceMessage?.message || m.viewOnceMessageV2?.message || m.documentWithCaptionMessage?.message;
+        }
+
+        let text = m.conversation || 
+                   m.extendedTextMessage?.text || 
+                   m.imageMessage?.caption ||
+                   m.videoMessage?.caption ||
+                   m.documentMessage?.caption ||
+                   m.buttonsResponseMessage?.selectedButtonId ||
+                   m.buttonsResponseMessage?.selectedDisplayText ||
+                   m.templateButtonReplyMessage?.selectedId ||
+                   m.templateButtonReplyMessage?.selectedDisplayText ||
+                   m.listResponseMessage?.singleSelectReply?.selectedRowId ||
+                   m.listResponseMessage?.title ||
+                   '';
+
+        if (!text && m.interactiveResponseMessage) {
+          try {
+            const nativeFlow = m.interactiveResponseMessage.nativeFlowResponseMessage;
+            if (nativeFlow?.paramsJson) {
+              const parsed = JSON.parse(nativeFlow.paramsJson);
+              text = parsed.id || parsed.selected_id || parsed.value || '';
+            }
+          } catch {}
+        }
+
+        const rawPhone = remoteJid.replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
+        const participantPhone = (msg.key.participant || msg.participant || '').replace('@s.whatsapp.net', '').replace(/\D/g, '');
         const dbCheck = loadDb();
-        const { primaryPhone, allPhones } = resolveLinkedPhones(clientPhone, dbCheck);
+        const { primaryPhone, allPhones } = resolveLinkedPhones(rawPhone, dbCheck);
+
+        // Identificar telefone real do cliente (prioriza formato celular 10-13 dígitos sobre LID)
+        const clientPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13)
+          ? primaryPhone
+          : (participantPhone && participantPhone.length >= 10 && participantPhone.length <= 13)
+            ? participantPhone
+            : rawPhone;
+
+        // JID de destino para envio: se remoteJid for @lid, enviar para o telefone real @s.whatsapp.net
+        const destinationJid = (clientPhone && clientPhone.length >= 10 && clientPhone.length <= 13)
+          ? `${clientPhone}@s.whatsapp.net`
+          : remoteJid;
 
         // Identificar se o cliente já tem um nome cadastrado pelo fluxo/CRM
         let registeredName = null;
-        for (const p of allPhones) {
+        for (const p of [clientPhone, rawPhone, ...allPhones]) {
           const contact = (typeof dbCheck.contacts === 'object' && !Array.isArray(dbCheck.contacts)) 
             ? dbCheck.contacts[p] 
             : (Array.isArray(dbCheck.contacts) ? dbCheck.contacts.find(c => String(c?.phone || '').replace(/\D/g, '') === p) : null);
@@ -254,59 +300,54 @@ async function startWhatsApp() {
         }
 
         const clientName = registeredName || msg.pushName || 'Cliente Pitoco';
-        let text = msg.message.conversation || 
-                   msg.message.extendedTextMessage?.text || 
-                   msg.message.buttonsResponseMessage?.selectedButtonId ||
-                   msg.message.buttonsResponseMessage?.selectedDisplayText ||
-                   msg.message.templateButtonReplyMessage?.selectedId ||
-                   msg.message.templateButtonReplyMessage?.selectedDisplayText ||
-                   msg.message.listResponseMessage?.singleSelectReply?.selectedRowId ||
-                   msg.message.listResponseMessage?.title ||
-                   '';
 
-        if (!text && msg.message.interactiveResponseMessage) {
-          try {
-            const nativeFlow = msg.message.interactiveResponseMessage.nativeFlowResponseMessage;
-            if (nativeFlow?.paramsJson) {
-              const parsed = JSON.parse(nativeFlow.paramsJson);
-              text = parsed.id || parsed.selected_id || parsed.value || '';
-            }
-          } catch {}
-        }
-
-        console.log(`📩 [WhatsApp Recebido] ${clientPhone} (${clientName}) [${remoteJid}]: "${text}"`);
-        await recordMessageLocallyAndSupabase(clientPhone, clientName, 'inbound', text);
+        console.log(`📩 [WhatsApp Recebido] ${clientPhone} (${clientName}) [${remoteJid} -> ${destinationJid}]: "${text}"`);
 
         // 🛡️ BLINDAGEM DE ATENDIMENTO HUMANO & COMANDOS DE RETORNO AO ROBÔ
-        const cleanInputLower = text.toLowerCase().trim();
+        const cleanInputLower = (text || '').toLowerCase().trim();
+        const cleanTextOnly = cleanInputLower.replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
         const isBotResetCmd = [
           '#bot', '#robo', '#robô', '#sair', '#reiniciar', '#reset', '#menu', '#inicio',
           '/bot', '/sair', '/menu', 'reiniciar', 'menu', 'inicio', 'início', 'começar', 'comecar',
-          'voltar', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'start'
-        ].includes(cleanInputLower);
+          'voltar', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'start', 'bot'
+        ].some(cmd => cleanInputLower === cmd || cleanTextOnly === cmd || cleanTextOnly.startsWith(`${cmd} `));
 
         const convCheck = dbCheck.conversations?.[`conv-${clientPhone}`] || 
-                          Object.values(dbCheck.conversations || {}).find(c => 
-                            String(c?.phone || c?.contact_phone || '').replace(/\D/g, '') === clientPhone
-                          );
+                          dbCheck.conversations?.[`conv-${rawPhone}`] ||
+                          Object.values(dbCheck.conversations || {}).find(c => {
+                            const cp = String(c?.phone || c?.contact_phone || '').replace(/\D/g, '');
+                            return cp === clientPhone || cp === rawPhone;
+                          });
 
-        if (convCheck && convCheck.status === 'human') {
-          const lastMsgTime = new Date(convCheck.last_message_at || convCheck.updated_at || 0).getTime();
-          const isHumanExpired = (Date.now() - lastMsgTime) > (15 * 60 * 1000);
-
-          if (isBotResetCmd || isHumanExpired) {
-            console.log(`🤖 [Atendimento Robô] ${isBotResetCmd ? `Comando/saudação "${text}"` : 'Inatividade (>15min)'} detectada. Reassumindo atendimento com o robô para ${clientPhone}.`);
+        if (convCheck) {
+          if (convCheck.status === 'closed') {
             convCheck.status = 'bot';
-            convCheck.assigned_to = null;
-            convCheck.assigned_attendant_name = null;
-            convCheck.assigned_attendant_id = null;
-            if (dbCheck.sessions?.[clientPhone]) delete dbCheck.sessions[clientPhone];
             saveDb(dbCheck);
-          } else {
-            console.log(`🛡️ [Atendimento Humano Ativo] Cliente ${clientPhone} está em atendimento humano ("${convCheck.assigned_to || convCheck.assigned_attendant_name || 'Atendente'}"). Robô em pausa para não interferir.`);
-            continue;
+          }
+
+          if (convCheck.status === 'human') {
+            const isUnassigned = !convCheck.assigned_to || convCheck.assigned_to === 'undefined' || convCheck.assigned_to === null;
+            const lastAttendantTime = new Date(convCheck.last_attendant_message_at || convCheck.updated_at || 0).getTime();
+            const isHumanExpired = (Date.now() - lastAttendantTime) > (15 * 60 * 1000);
+
+            if (isBotResetCmd || isUnassigned || isHumanExpired) {
+              console.log(`🤖 [Atendimento Robô] ${isBotResetCmd ? `Comando/saudação "${text}"` : (isUnassigned ? 'Sem atendente atribuído' : 'Inatividade (>15min)')} detectado. Reassumindo atendimento com o robô para ${clientPhone}.`);
+              convCheck.status = 'bot';
+              convCheck.assigned_to = null;
+              convCheck.assigned_attendant_name = null;
+              convCheck.assigned_attendant_id = null;
+              if (dbCheck.sessions?.[clientPhone]) delete dbCheck.sessions[clientPhone];
+              if (dbCheck.sessions?.[rawPhone]) delete dbCheck.sessions[rawPhone];
+              saveDb(dbCheck);
+            } else {
+              console.log(`🛡️ [Atendimento Humano Ativo] Cliente ${clientPhone} está em atendimento humano com "${convCheck.assigned_to}". Robô em pausa para não interferir.`);
+              await recordMessageLocallyAndSupabase(clientPhone, clientName, 'inbound', text);
+              continue;
+            }
           }
         }
+
+        await recordMessageLocallyAndSupabase(clientPhone, clientName, 'inbound', text);
 
         // 🛡️ ANTI-BAN: Marcar mensagem como lida na telemetria oficial do WhatsApp
         try {
@@ -323,18 +364,18 @@ async function startWhatsApp() {
 
         // Executar o fluxo publicado no Studio / Painel Admin
         try {
-          console.log(`⚙️ [Flow Execution] Executando fluxo ativo no bot para ${clientPhone} (${clientName})...`);
-          const replies = await executePublishedFlow(remoteJid, text, clientName, primaryPhone || clientPhone);
+          console.log(`⚙️ [Flow Execution] Executando fluxo ativo no bot para ${clientPhone} (${clientName}) [Destino: ${destinationJid}]...`);
+          const replies = await executePublishedFlow(destinationJid, text, clientName, clientPhone);
 
           if (Array.isArray(replies) && replies.length > 0) {
             for (let i = 0; i < replies.length; i++) {
               const reply = replies[i];
               const replyMode = (typeof reply === 'object' && reply?.replyMode) ? reply.replyMode : 'send';
               const quotedToPass = replyMode === 'reply' ? msg : null;
-              await sendBotReply(remoteJid, reply, quotedToPass);
+              await sendBotReply(destinationJid, reply, quotedToPass);
               if (i < replies.length - 1) {
                 // Intervalo natural com digitação simulada entre mensagens consecutivas do bot
-                await simulateHumanPresence(remoteJid, 20);
+                await simulateHumanPresence(destinationJid, 20);
               }
             }
           } else {
@@ -342,7 +383,7 @@ async function startWhatsApp() {
           }
         } catch (botErr) {
           console.error(`❌ [Bot Engine Error] Erro ao processar mensagem para ${clientPhone}:`, botErr);
-          await sendBotReply(remoteJid, `Olá, *${clientName}*! Recebemos sua mensagem na *Pitoco de Gente*. Como podemos te ajudar?`, null);
+          await sendBotReply(destinationJid, `Olá, *${clientName}*! Recebemos sua mensagem na *Pitoco de Gente*. Como podemos te ajudar?`, null);
         }
       }
     });
@@ -378,38 +419,51 @@ async function simulateHumanPresence(remoteJid, charCount = 30) {
 }
 
 // Enviar resposta gerada pelo motor de fluxo (texto, botões ou mídia)
-async function sendBotReply(remoteJid, reply, quotedMsg = null, skipRecord = false) {
+async function sendBotReply(destinationJid, reply, quotedMsg = null, skipRecord = false) {
   if (!sock || connectionStatus !== 'connected') {
-    console.warn(`[SendReply] ⚠️ Baileys não conectado, não foi possível responder para ${remoteJid}`);
+    console.warn(`[SendReply] ⚠️ Baileys não conectado, não foi possível responder para ${destinationJid}`);
     return false;
   }
 
-  const cleanPhone = remoteJid.replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
+  const cleanPhone = destinationJid.replace('@s.whatsapp.net', '').replace(/@lid$/, '').replace(/\D/g, '');
   
   // Respeitar a opção do nó: se o card estiver em 'send', desativar citação
   const isSendOnly = (typeof reply === 'object' && reply?.replyMode === 'send');
   const effectiveQuoted = isSendOnly ? null : quotedMsg;
   const sendOpts = effectiveQuoted ? { quoted: effectiveQuoted } : {};
 
+  // Se o destino for LID, buscar o telefone real em contatos/conversas
+  let targetJid = destinationJid;
+  if (destinationJid.includes('@lid')) {
+    const db = loadDb();
+    const { primaryPhone } = resolveLinkedPhones(cleanPhone, db);
+    if (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) {
+      targetJid = `${primaryPhone}@s.whatsapp.net`;
+      console.log(`[SendReply] 🔄 Roteando resposta de LID (${destinationJid}) para Telefone Real: ${targetJid}`);
+    }
+  }
+
   const trySendMessage = async (payload) => {
     try {
-      await sock.sendMessage(remoteJid, payload, sendOpts);
+      await sock.sendMessage(targetJid, payload, sendOpts);
       return true;
     } catch (err1) {
-      console.warn(`[SendReply] Envio com quoted falhou (${err1?.message}), tentando sem quoted...`);
+      console.warn(`[SendReply] Envio para ${targetJid} com quoted falhou (${err1?.message}), tentando sem quoted...`);
       try {
-        await sock.sendMessage(remoteJid, payload);
+        await sock.sendMessage(targetJid, payload);
         return true;
       } catch (err2) {
-        console.error(`❌ [SendReply] Falha ao enviar para ${remoteJid}:`, err2?.message || err2);
-        if (remoteJid.includes('@lid') && cleanPhone.length >= 10 && cleanPhone.length <= 13) {
-          try {
-            const fallbackJid = `${cleanPhone}@s.whatsapp.net`;
-            await sock.sendMessage(fallbackJid, payload);
-            console.log(`✅ [SendReply] Sucesso via fallback JID: ${fallbackJid}`);
-            return true;
-          } catch (err3) {
-            console.error(`❌ [SendReply] Fallback JID falhou:`, err3?.message || err3);
+        console.error(`❌ [SendReply] Falha ao enviar para ${targetJid}:`, err2?.message || err2);
+        if (cleanPhone.length >= 10 && cleanPhone.length <= 13) {
+          const fallbackJid = `${cleanPhone}@s.whatsapp.net`;
+          if (fallbackJid !== targetJid) {
+            try {
+              await sock.sendMessage(fallbackJid, payload);
+              console.log(`✅ [SendReply] Sucesso via fallback JID: ${fallbackJid}`);
+              return true;
+            } catch (err3) {
+              console.error(`❌ [SendReply] Fallback JID ${fallbackJid} falhou:`, err3?.message || err3);
+            }
           }
         }
         return false;
@@ -422,11 +476,11 @@ async function sendBotReply(remoteJid, reply, quotedMsg = null, skipRecord = fal
     const textContent = typeof reply === 'string' ? reply : (reply && reply.type === 'text' ? reply.text : null);
     if (textContent) {
       // 🛡️ ANTI-BAN: Simular presença humana de digitação antes do disparo
-      await simulateHumanPresence(remoteJid, textContent.length);
+      await simulateHumanPresence(targetJid, textContent.length);
 
       const ok = await trySendMessage({ text: textContent });
       if (ok) {
-        console.log(`✅ [WhatsApp Enviado] Texto (${isSendOnly ? 'Envio Direto' : 'Com Citação'}) para ${remoteJid}: "${textContent.slice(0, 50).replace(/\n/g, ' ')}..."`);
+        console.log(`✅ [WhatsApp Enviado] Texto (${isSendOnly ? 'Envio Direto' : 'Com Citação'}) para ${targetJid}: "${textContent.slice(0, 50).replace(/\n/g, ' ')}..."`);
         if (!skipRecord) {
           await recordMessageLocallyAndSupabase(cleanPhone, 'Pitoco Bot', 'outbound', textContent);
         }
@@ -2763,9 +2817,8 @@ app.listen(PORT, HOST, async () => {
       .catch((err) => console.warn('[Meta API] Erro ao testar conexão:', err.message));
   } else {
     console.log('ℹ️ [Pitoco Server] Meta Cloud API aguardando credenciais. Acesse o painel em Conexão WhatsApp para configurar.');
-    if (process.env.ENABLE_BAILEYS === 'true') {
-      startWhatsApp();
-    }
+    console.log('🤖 [Pitoco Server] Inicializando conexão WhatsApp Baileys automaticamente no boot...');
+    startWhatsApp();
   }
 
   // Sincronização segura no startup: Carregar estado mais recente do Supabase (Cloud First)
