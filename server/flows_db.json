@@ -1231,10 +1231,9 @@
       "status": "active",
       "is_registered": true,
       "tags": [
-        "Lead",
-        "Cliente",
         "Cliente WhatsApp",
-        "Bot"
+        "Bot",
+        "Cliente"
       ],
       "notes": "Cadastrado e atualizado pelo fluxo do bot",
       "custom_fields": {

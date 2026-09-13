@@ -37,7 +37,8 @@ import {
   resolveLinkedPhones,
   syncContactToSupabase,
   recordRealMessage,
-  isTestOrDummy
+  isTestOrDummy,
+  setWhatsAppProfilePicGetter
 } from './flowRunner.mjs';
 import { processAdminBotMessage } from './botEngine.mjs';
 import { syncToSupabase } from './syncSupabase.mjs';
@@ -130,6 +131,22 @@ let connectedPhone = null;
 let connectedName = null;
 let connectedAt = null;
 let isStartingWhatsApp = false;
+
+// 📸 Captura oficial da foto de perfil do WhatsApp via Baileys Socket
+export async function getWhatsAppProfilePicture(jidOrPhone) {
+  if (!sock) return null;
+  try {
+    const clean = String(jidOrPhone || '').replace(/\D/g, '');
+    if (!clean) return null;
+    const jid = clean.includes('@') ? clean : `${clean}@s.whatsapp.net`;
+    const url = await sock.profilePictureUrl(jid, 'image');
+    return url || null;
+  } catch (err) {
+    // Foto privada ou não definida no WhatsApp
+    return null;
+  }
+}
+setWhatsAppProfilePicGetter(getWhatsAppProfilePicture);
 
 async function restartWhatsApp(clearAuth = false) {
   try {
@@ -440,7 +457,11 @@ async function startWhatsApp() {
         // Executar o fluxo publicado no Studio / Painel Admin
         try {
           console.log(`⚙️ [Flow Execution] Executando fluxo ativo no bot para ${clientPhone} (${clientName}) [Destino: ${destinationJid}]...`);
-          const replies = await executePublishedFlow(destinationJid, text, clientName, clientPhone);
+          let profilePicUrl = null;
+          try {
+            profilePicUrl = await getWhatsAppProfilePicture(clientPhone);
+          } catch (picErr) {}
+          const replies = await executePublishedFlow(destinationJid, text, clientName, clientPhone, profilePicUrl);
 
           if (Array.isArray(replies) && replies.length > 0) {
             for (let i = 0; i < replies.length; i++) {
@@ -1258,17 +1279,88 @@ app.get('/api/contacts', async (req, res) => {
     const db = loadDb();
     let contactsList = [];
 
-    // Prioridade 1: Buscar do Supabase em nuvem
+    // Prioridade 1: Buscar do Supabase em nuvem (merge clients + contacts + cache local)
     if (supabaseServer) {
       try {
-        let query = supabaseServer.from('clients').select('*').order('last_interaction', { ascending: false });
+        let clientsQuery = supabaseServer.from('clients').select('*').order('last_interaction', { ascending: false });
         if (req.query.store_id) {
-          query = query.eq('store_id', req.query.store_id);
+          clientsQuery = clientsQuery.eq('store_id', req.query.store_id);
         }
-        const { data, error } = await query;
-        if (!error && Array.isArray(data)) {
-          // Filtrar WhatsApp LIDs (>= 14 dígitos ou começando com 1686 / 219), nomes do bot e dados de teste
-          const validClients = data.filter(c => {
+
+        const [clientsRes, contactsRes] = await Promise.allSettled([
+          clientsQuery,
+          supabaseServer.from('contacts').select('*'),
+        ]);
+
+        const clientsData = clientsRes.status === 'fulfilled' && !clientsRes.value.error && Array.isArray(clientsRes.value.data)
+          ? clientsRes.value.data
+          : [];
+        const contactsData = contactsRes.status === 'fulfilled' && !contactsRes.value.error && Array.isArray(contactsRes.value.data)
+          ? contactsRes.value.data
+          : [];
+
+        if (clientsData.length > 0 || contactsData.length > 0) {
+          const contactDetailsMap = new Map();
+          for (const ct of contactsData) {
+            const p = String(ct.phone || '').replace(/\D/g, '');
+            if (p) contactDetailsMap.set(p, ct);
+          }
+
+          const mergedMap = new Map();
+
+          // 1. Processar dados de clients
+          for (const c of clientsData) {
+            const p = String(c.phone || '').replace(/\D/g, '');
+            if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) continue;
+            const ct = contactDetailsMap.get(p) || {};
+            const local = (db.contacts && typeof db.contacts === 'object') ? (db.contacts[p] || {}) : {};
+
+            const mergedPhoto = ct.profile_picture_url || local.profile_picture_url || c.profile_picture_url || null;
+            const cleanTags = (c.tags || ct.tags || local.tags || ['Cliente WhatsApp']).filter(t => t.toLowerCase() !== 'lead');
+            const finalTags = cleanTags.length > 0 ? cleanTags : ['Cliente WhatsApp'];
+
+            mergedMap.set(p, {
+              ...local,
+              ...c,
+              id: c.id || ct.id || local.id || `client-${p}`,
+              name: c.name || ct.name || local.name || 'Cliente WhatsApp',
+              phone: p,
+              profile_picture_url: mergedPhoto,
+              tags: finalTags,
+              status: ct.status || local.status || 'active',
+              notes: c.notes || ct.notes || local.notes || null,
+              baby_name: c.baby_name || ct.baby_name || ct.metadata?.baby_name || local.baby_name || null,
+              due_date: c.due_date || ct.due_date || ct.metadata?.due_date || local.due_date || null,
+              last_interaction: c.last_interaction || ct.last_interaction || local.last_interaction || new Date().toISOString(),
+              updated_at: c.updated_at || ct.updated_at || local.updated_at || new Date().toISOString(),
+            });
+          }
+
+          // 2. Se houver contatos em contacts que não estão em clients
+          for (const ct of contactsData) {
+            const p = String(ct.phone || '').replace(/\D/g, '');
+            if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) continue;
+            if (!mergedMap.has(p)) {
+              const local = (db.contacts && typeof db.contacts === 'object') ? (db.contacts[p] || {}) : {};
+              const mergedPhoto = ct.profile_picture_url || local.profile_picture_url || null;
+              const cleanTags = (ct.tags || local.tags || ['Cliente WhatsApp']).filter(t => t.toLowerCase() !== 'lead');
+              mergedMap.set(p, {
+                ...local,
+                ...ct,
+                id: ct.id || local.id || `contact-${p}`,
+                name: ct.name || local.name || 'Cliente WhatsApp',
+                phone: p,
+                profile_picture_url: mergedPhoto,
+                tags: cleanTags.length > 0 ? cleanTags : ['Cliente WhatsApp'],
+                status: ct.status || local.status || 'active',
+                notes: ct.notes || local.notes || null,
+                last_interaction: ct.last_interaction || local.last_interaction || new Date().toISOString(),
+                updated_at: ct.updated_at || local.updated_at || new Date().toISOString(),
+              });
+            }
+          }
+
+          const validClients = Array.from(mergedMap.values()).filter(c => {
             const p = String(c.phone || '').replace(/\D/g, '');
             if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) return false;
             const name = (c.name || '').toLowerCase().trim();
@@ -1276,14 +1368,20 @@ app.get('/api/contacts', async (req, res) => {
             if (isTestOrDummy(p, name)) return false;
             return true;
           });
-          // Atualizar cache local do db.contacts para refletir a nuvem
-          const cloudMap = {};
+
+          // Atualizar cache local do db.contacts sem perder campos locais existentes
+          if (!db.contacts || typeof db.contacts !== 'object' || Array.isArray(db.contacts)) {
+            db.contacts = {};
+          }
           validClients.forEach(c => {
             const p = String(c.phone || '').replace(/\D/g, '');
-            if (p) cloudMap[p] = c;
+            if (p) {
+              db.contacts[p] = { ...(db.contacts[p] || {}), ...c };
+            }
           });
-          db.contacts = cloudMap;
           saveDb(db);
+
+          validClients.sort((a, b) => new Date(b.last_interaction || b.updated_at || 0) - new Date(a.last_interaction || a.updated_at || 0));
           return res.json(validClients);
         }
       } catch (cloudErr) {

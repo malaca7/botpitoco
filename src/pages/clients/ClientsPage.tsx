@@ -746,8 +746,24 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
                   {/* Top: Avatar & Main Info */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${getAvatarGradient(client.name)} flex items-center justify-center font-bold text-sm text-white shadow-md`}>
-                        {initials}
+                      <div className="w-11 h-11 rounded-2xl relative overflow-hidden flex-shrink-0 border border-white/10 shadow-md">
+                        {client.profile_picture_url ? (
+                          <img
+                            src={client.profile_picture_url}
+                            alt={client.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLElement).style.display = 'none';
+                              const fallback = e.currentTarget.parentElement?.querySelector('.avatar-fallback');
+                              if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          className={`avatar-fallback w-full h-full bg-gradient-to-tr ${getAvatarGradient(client.name)} flex items-center justify-center font-bold text-sm text-white ${client.profile_picture_url ? 'hidden' : ''}`}
+                        >
+                          {initials}
+                        </div>
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white group-hover:text-brand-300 transition-colors flex items-center gap-1.5">
@@ -886,8 +902,24 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
                   return (
                     <tr key={client.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="p-4 font-bold text-white flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${getAvatarGradient(client.name)} flex items-center justify-center font-bold text-xs text-white`}>
-                          {client.name[0] || 'C'}
+                        <div className="w-8 h-8 rounded-xl relative overflow-hidden flex-shrink-0 border border-white/10">
+                          {client.profile_picture_url ? (
+                            <img
+                              src={client.profile_picture_url}
+                              alt={client.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = 'none';
+                                const fallback = e.currentTarget.parentElement?.querySelector('.avatar-fallback');
+                                if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className={`avatar-fallback w-full h-full bg-gradient-to-tr ${getAvatarGradient(client.name)} flex items-center justify-center font-bold text-xs text-white ${client.profile_picture_url ? 'hidden' : ''}`}
+                          >
+                            {client.name[0] || 'C'}
+                          </div>
                         </div>
                         <div>
                           <span>{client.name}</span>
@@ -969,8 +1001,24 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ onNavigate }) => {
               {/* Drawer Header */}
               <div className="flex items-start justify-between border-b border-white/10 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-tr ${getAvatarGradient(selectedClientForDrawer.name)} flex items-center justify-center font-bold text-lg text-white shadow-lg`}>
-                    {selectedClientForDrawer.name.substring(0, 2).toUpperCase()}
+                  <div className="w-14 h-14 rounded-2xl relative overflow-hidden flex-shrink-0 border border-white/10 shadow-lg">
+                    {selectedClientForDrawer.profile_picture_url ? (
+                      <img
+                        src={selectedClientForDrawer.profile_picture_url}
+                        alt={selectedClientForDrawer.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLElement).style.display = 'none';
+                          const fallback = e.currentTarget.parentElement?.querySelector('.avatar-fallback');
+                          if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`avatar-fallback w-full h-full bg-gradient-to-tr ${getAvatarGradient(selectedClientForDrawer.name)} flex items-center justify-center font-bold text-lg text-white ${selectedClientForDrawer.profile_picture_url ? 'hidden' : ''}`}
+                    >
+                      {selectedClientForDrawer.name.substring(0, 2).toUpperCase()}
+                    </div>
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-white flex items-center gap-2">

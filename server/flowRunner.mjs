@@ -34,14 +34,19 @@ import {
 } from './defaultData.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://cbeiguyvoepbcafmxduy.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNiZWlndXl2b2VwYmNhZm14ZHV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MzU5NzcsImV4cCI6MjEwNDMxMTk3N30.1XpWL6ns9NlPh4sQ3M8-OJTnKCPH-jf89iFspmBrKxM';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNiZWlndXl2b2VwYmNhZm14ZHV5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODczNTk3NywiZXhwIjoyMTA0MzExOTc3fQ.sbB-6Fx4uR61oDin8djrdbpmNSPs2Z8hGdYSoVhIHvw';
 
-export const supabaseClient = (createClient && SUPABASE_URL && SUPABASE_ANON_KEY) 
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const supabaseClient = (createClient && SUPABASE_URL && SUPABASE_KEY) 
+  ? createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false },
       realtime: WebSocketClient ? { transport: WebSocketClient } : undefined
     }) 
   : null;
+
+let whatsAppProfilePicGetter = null;
+export function setWhatsAppProfilePicGetter(fn) {
+  whatsAppProfilePicGetter = fn;
+}
 
 
 // Helper: Resolver correspondência bidirecional entre LID (WhatsApp Privacy ID) e Telefone Real (ex: 558196138924)
@@ -1897,13 +1902,23 @@ export async function executePublishedFlow(senderJid, messageText, pushName, rea
     recordRealMessage(cleanPhone, senderName, 'inbound', cleanInput, null, profilePicUrl);
   }
 
+  const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
+  const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
+
+  // Auto-resolver foto de perfil do WhatsApp se não foi fornecida diretamente
+  if (!profilePicUrl && whatsAppProfilePicGetter && !isSim) {
+    try {
+      profilePicUrl = await whatsAppProfilePicGetter(targetPhone || cleanPhone);
+    } catch (e) {}
+  }
+  if (!profilePicUrl && db.contacts?.[targetPhone]?.profile_picture_url) {
+    profilePicUrl = db.contacts[targetPhone].profile_picture_url;
+  }
+
   const convId = `conv-${cleanPhone}`;
   const currentConv = db.conversations?.[convId] || Object.values(db.conversations || {}).find(c => 
     String(c?.phone || c?.contact_phone || '').replace(/\D/g, '') === cleanPhone
   );
-
-  const { primaryPhone, allPhones } = resolveLinkedPhones(cleanPhone, db);
-  const targetPhone = (primaryPhone && primaryPhone.length >= 10 && primaryPhone.length <= 13) ? primaryPhone : cleanPhone;
 
   // 1. Obter sessão atual buscando em todas as chaves vinculadas (telefone real, LID, rawId)
   let existingSession = null;
@@ -2691,24 +2706,41 @@ function parseCustomDateString(input) {
         }
       }
 
-      // Fallback robusto se a variável não foi substituída ou contiver valores genéricos
-      const isUnresolved = !resolvedName || 
-                           resolvedName.startsWith('{{') || 
-                           resolvedName.endsWith('}}') || 
-                           ['nome_cliente', 'cliente_nome', 'nome', 'resposta_usuario', 'nome_clientenovo', 'undefined', 'null', 'Cliente WhatsApp', 'Cliente', 'Cliente Pitoco'].includes(resolvedName.trim());
+      // Candidatos a nome em ordem de prioridade
+      const invalidPlaceholders = new Set([
+        'nome_cliente', 'cliente_nome', 'nome', 'resposta_usuario', 'nome_clientenovo',
+        'undefined', 'null', 'cliente whatsapp', 'cliente', 'cliente pitoco', 'lead'
+      ]);
 
-      if (isUnresolved) {
-        resolvedName = session.variables['nome_clientenovo'] || 
-                       session.variables['nome_cliente'] || 
-                       session.variables['cliente_nome'] || 
-                       session.variables['nome'] || 
-                       (senderName && senderName !== 'Cliente' && senderName !== 'Cliente Pitoco' ? senderName : '') || 
-                       'Cliente WhatsApp';
+      const isInvalidName = (n) => {
+        if (!n) return true;
+        const s = String(n).trim().toLowerCase();
+        if (!s || s.startsWith('{{') || s.endsWith('}}')) return true;
+        if (invalidPlaceholders.has(s)) return true;
+        if (/^\d+$/.test(s)) return true;
+        return false;
+      };
+
+      if (isInvalidName(resolvedName)) {
+        const candidateKeys = [
+          session.variables['resposta_usuario'],
+          session.variables['nome_clientenovo'],
+          session.variables['nome_cliente'],
+          session.variables['cliente_nome'],
+          session.variables['nome'],
+          cleanInput,
+          senderName
+        ];
+        resolvedName = '';
+        for (const cand of candidateKeys) {
+          if (cand && !isInvalidName(cand)) {
+            resolvedName = cand;
+            break;
+          }
+        }
       }
-      resolvedName = formatCustomerName(resolvedName);
-      if (!resolvedName || /^\d+$/.test(resolvedName)) {
-        resolvedName = (senderName && senderName !== 'Cliente' && senderName !== 'Cliente Pitoco') ? formatCustomerName(senderName) : 'Cliente WhatsApp';
-      }
+
+      resolvedName = formatCustomerName(resolvedName) || 'Cliente WhatsApp';
 
       // 2. Resolver Telefone do Cliente (Interagindo, Variável ou Fixo)
       let targetPhone = cleanPhone;
@@ -2741,7 +2773,20 @@ function parseCustomDateString(input) {
       // 3. Resolver Foto do Perfil do WhatsApp
       let resolvedPhoto = '';
       if (config.saveProfilePicture !== false) {
-        resolvedPhoto = profilePicUrl || (db.conversations && (db.conversations[`conv-${targetPhone}`]?.profile_pic || db.conversations[`conv-${cleanPhone}`]?.profile_pic)) || '';
+        if (!resolvedPhoto && whatsAppProfilePicGetter && !isSim) {
+          try {
+            resolvedPhoto = await whatsAppProfilePicGetter(targetPhone);
+          } catch (e) {}
+        }
+        if (!resolvedPhoto && profilePicUrl) {
+          resolvedPhoto = profilePicUrl;
+        }
+        if (!resolvedPhoto && db.conversations) {
+          resolvedPhoto = db.conversations[`conv-${targetPhone}`]?.profile_pic || db.conversations[`conv-${cleanPhone}`]?.profile_pic || '';
+        }
+        if (!resolvedPhoto && db.contacts) {
+          resolvedPhoto = db.contacts[targetPhone]?.profile_picture_url || db.contacts[cleanPhone]?.profile_picture_url || '';
+        }
       }
       if (config.customPhotoUrl) {
         const customP = replaceVars(config.customPhotoUrl, session.variables, botProfile);
@@ -2775,15 +2820,20 @@ function parseCustomDateString(input) {
 
       if (!isTargetLid && !isSim && !isTestOrDummy(targetPhone, resolvedName)) {
         const existing = (typeof db.contacts === 'object' && !Array.isArray(db.contacts)) ? (db.contacts[targetPhone] || {}) : {};
+        
+        // Limpar a tag "Lead" ao cadastrar/atualizar como cliente ativo
+        const existingTags = (existing.tags || []).filter(t => t.toLowerCase() !== 'lead');
+        const finalTags = Array.from(new Set([...tagsList, ...existingTags, 'Cliente WhatsApp', 'Bot'])).filter(t => t.toLowerCase() !== 'lead');
+
         const contactObj = {
           id: existing.id || `contact-${targetPhone}`,
           name: resolvedName || existing.name || 'Cliente WhatsApp',
           phone: targetPhone,
-          profile_picture_url: resolvedPhoto || existing.profile_picture_url,
+          profile_picture_url: resolvedPhoto || existing.profile_picture_url || null,
           baby_name: babyName || existing.baby_name,
           due_date: dueDate || existing.due_date,
           email: email || existing.email,
-          tags: Array.from(new Set([...(existing.tags || []), ...tagsList, 'Cliente', 'Cliente WhatsApp', 'Bot'])),
+          tags: finalTags,
           status: 'active',
           is_registered: true,
           notes: notes || existing.notes || 'Cadastrado e atualizado pelo fluxo do bot',
@@ -2823,11 +2873,9 @@ function parseCustomDateString(input) {
         }
       }
 
-      try {
-        fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf-8');
-      } catch (err) {}
+      saveDb(db);
 
-      // 8. Variáveis no Contexto da Conversa com todos os aliases
+      // 9. Variáveis no Contexto da Conversa com todos os aliases
       session.variables['cliente_salvo'] = true;
       session.variables['cliente_id'] = savedContact?.id;
       session.variables['cliente_nome'] = resolvedName;
@@ -2849,10 +2897,13 @@ function parseCustomDateString(input) {
       session.variables['telefone_whatsapp'] = targetPhone;
       session.variables['cliente_foto'] = resolvedPhoto;
       session.variables['foto_cliente'] = resolvedPhoto;
+      session.variables['profile_picture_url'] = resolvedPhoto;
+      session.variables['{{cliente_foto}}'] = resolvedPhoto;
+      session.variables['{{foto_cliente}}'] = resolvedPhoto;
       if (babyName) session.variables['cliente_bebe'] = babyName;
       if (dueDate) session.variables['cliente_dpp'] = dueDate;
 
-      console.log(`[FlowRunner] 💾 [Salvar Dados] Contato salvo: "${resolvedName}" (${targetPhone}) | Foto: ${resolvedPhoto ? 'Sim' : 'Não'} | Tags: [${tagsList.join(', ')}]`);
+      console.log(`[FlowRunner] 💾 [Salvar Dados] Contato salvo: "${resolvedName}" (${targetPhone}) | Foto: ${resolvedPhoto ? 'Sim' : 'Não'} | Tags: [${(savedContact?.tags || tagsList).join(', ')}]`);
 
       const outgoing = edges.find((e) => e.source === currentNode.id);
       if (outgoing) {

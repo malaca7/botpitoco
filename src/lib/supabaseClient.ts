@@ -684,36 +684,58 @@ export async function getClients(storeId?: string): Promise<Contact[]> {
     if (storeId && storeId !== 'all') {
       query = query.or(`store_id.eq.${storeId},store_id.is.null`);
     }
-    const { data, error } = await query.order('updated_at', { ascending: false });
-    if (error) throw error;
-    if (Array.isArray(data)) {
-      return data
+    const [clientsRes, contactsRes] = await Promise.all([
+      query.order('updated_at', { ascending: false }),
+      supabase.from('contacts').select('phone, name, profile_picture_url, status, tags, metadata')
+    ]);
+
+    const contactMap = new Map();
+    if (Array.isArray(contactsRes.data)) {
+      contactsRes.data.forEach((co: any) => {
+        const p = String(co.phone || '').replace(/\D/g, '');
+        if (p) contactMap.set(p, co);
+      });
+    }
+
+    if (Array.isArray(clientsRes.data)) {
+      return clientsRes.data
         .filter((c: any) => {
           const p = String(c.phone || '').replace(/\D/g, '');
           // NUNCA exibir WhatsApp LIDs (>= 14 dígitos ou começando com 1686/219)
           if (!p || p.length >= 14 || p.startsWith('1686') || p.startsWith('219')) return false;
           return true;
         })
-        .map((c: any) => ({
-          id: c.id,
-          name: c.name || 'Cliente WhatsApp',
-          phone: c.phone || '',
-          email: c.email || undefined,
-          address: c.address || undefined,
-          city: c.city || undefined,
-          notes: c.notes || undefined,
-          baby_name: c.baby_name || undefined,
-          due_date: c.due_date || undefined,
-          store_id: c.store_id || undefined,
-          store_name: c.store_name || undefined,
-          status: (c.status || 'active') as 'active' | 'blocked' | 'archived',
-          tags: Array.isArray(c.tags) ? c.tags : ['Cliente WhatsApp'],
-          total_orders: Number(c.total_orders) || 0,
-          total_spent: Number(c.total_spent) || 0,
-          last_interaction: c.last_interaction || c.updated_at || new Date().toISOString(),
-          created_at: c.created_at || new Date().toISOString(),
-          updated_at: c.updated_at || new Date().toISOString(),
-        }));
+        .map((c: any) => {
+          const cleanPhone = String(c.phone || '').replace(/\D/g, '');
+          const co = contactMap.get(cleanPhone) || {};
+          const resolvedName = (co.name && co.name !== 'Cliente WhatsApp' && co.name !== 'Cliente') ? co.name : (c.name || 'Cliente WhatsApp');
+          const resolvedPhoto = co.profile_picture_url || c.profile_picture_url || undefined;
+          const coTags = Array.isArray(co.tags) ? co.tags : [];
+          const cTags = Array.isArray(c.tags) ? c.tags : [];
+          const resolvedTags = coTags.length > 0 && !coTags.every((t: string) => t === 'Lead') ? coTags : (cTags.length > 0 ? cTags : ['Cliente']);
+
+          return {
+            id: c.id,
+            name: resolvedName,
+            phone: c.phone || '',
+            email: c.email || undefined,
+            address: c.address || undefined,
+            city: c.city || undefined,
+            notes: c.notes || undefined,
+            baby_name: c.baby_name || undefined,
+            due_date: c.due_date || undefined,
+            store_id: c.store_id || undefined,
+            store_name: c.store_name || undefined,
+            status: (co.status || c.status || 'active') as 'active' | 'blocked' | 'archived',
+            tags: resolvedTags,
+            profile_picture_url: resolvedPhoto,
+            total_orders: Number(c.total_orders) || 0,
+            total_spent: Number(c.total_spent) || 0,
+            last_interaction: c.last_interaction || c.updated_at || new Date().toISOString(),
+            created_at: c.created_at || new Date().toISOString(),
+            updated_at: c.updated_at || new Date().toISOString(),
+          };
+        });
     }
   } catch (err) {
     console.warn('[Supabase] getClients error:', err);
@@ -801,15 +823,16 @@ export async function saveClient(contact: Partial<Contact>): Promise<Contact | n
 
     await Promise.allSettled([
       supabase.from('clients').upsert(payload, { onConflict: 'phone' }),
-      supabase.from('contacts').upsert({
-        id: clientId,
-        name: payload.name,
-        phone: cleanPhone,
-        status: contact.status || 'active',
-        tags: payload.tags,
-        metadata: { baby_name: payload.baby_name, due_date: payload.due_date, notes: payload.notes },
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'phone' })
+        supabase.from('contacts').upsert({
+          id: clientId,
+          name: payload.name,
+          phone: cleanPhone,
+          profile_picture_url: contact.profile_picture_url || null,
+          status: contact.status || 'active',
+          tags: payload.tags,
+          metadata: { baby_name: payload.baby_name, due_date: payload.due_date, notes: payload.notes },
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'phone' })
     ]);
 
     return { ...(contact as Contact), ...payload };

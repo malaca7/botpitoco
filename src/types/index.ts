@@ -166,6 +166,7 @@ export interface Client {
   total_spent?: number;
   last_interaction?: string;
   tags?: string[];
+  profile_picture_url?: string;
   created_at: string;
   updated_at?: string;
 }
